@@ -1,0 +1,15 @@
+services:
+  devops-ai-monitor:
+    build: .
+    container_name: devops-ai-monitor
+    ports:
+      - "127.0.0.1:8000:8000"
+    environment:
+      OLLAMA_URL: "http://host.docker.internal:11434"
+      OLLAMA_MODEL: "qwen2.5:3b"
+      LOG_TAIL_DEFAULT: "150"
+    volumes:
+      # Docker Engine API socket. The app code only calls read operations,
+      # but access to this socket is powerful; keep the API bound to localhost.
+      - /var/run/docker.sock:/var/run/docker.sock
+    restart: unless-stopped
