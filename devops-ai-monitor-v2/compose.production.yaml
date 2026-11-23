@@ -11,6 +11,11 @@ services:
       REMEDIATION_DISABLED: "true"
       CORS_ALLOWED_ORIGINS: "${CORS_ALLOWED_ORIGINS:?Set CORS_ALLOWED_ORIGINS}"
       API_KEY: "${API_KEY:?Set API_KEY}"
+      OTEL_ENABLED: "${OTEL_ENABLED:-false}"
+      OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector:4318"
+      OTEL_SERVICE_NAME: "devops-ai-monitor-api"
+      OTEL_DEPLOYMENT_ENVIRONMENT: "production"
+      OTEL_SEMCONV_STABILITY_OPT_IN: "http"
       KUBERNETES_ENABLED: "${KUBERNETES_ENABLED:-false}"
       AWS_ENABLED: "${AWS_ENABLED:-false}"
     volumes:
@@ -46,6 +51,66 @@ services:
       timeout: 5s
       retries: 3
       start_period: 10s
+
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.165.0
+    profiles: ["telemetry"]
+    command: ["--config=/etc/otelcol-contrib/config.yaml"]
+    volumes:
+      - ./observability/otel-collector-config.yaml:/etc/otelcol-contrib/config.yaml:ro
+    ports:
+      - "127.0.0.1:4317:4317"
+      - "127.0.0.1:4318:4318"
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: "0.50"
+          memory: 384M
+
+  prometheus:
+    image: prom/prometheus:v3.16.0
+    profiles: ["telemetry"]
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--storage.tsdb.retention.time=7d"
+    volumes:
+      - ./observability/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    ports:
+      - "127.0.0.1:9090:9090"
+    depends_on:
+      - otel-collector
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: "0.50"
+          memory: 512M
+
+  grafana:
+    image: grafana/grafana:13.3.1
+    profiles: ["telemetry"]
+    environment:
+      GF_SECURITY_ADMIN_USER: "${GRAFANA_ADMIN_USER:-admin}"
+      GF_SECURITY_ADMIN_PASSWORD: "${GRAFANA_ADMIN_PASSWORD:-change-me-local}"
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./observability/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./observability/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    ports:
+      - "127.0.0.1:3001:3000"
+    depends_on:
+      - prometheus
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: "0.50"
+          memory: 512M
 
 volumes:
   monitor-data:
