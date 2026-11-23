@@ -92,8 +92,9 @@ Swagger UI: http://127.0.0.1:8000/docs
 ## Optional OpenTelemetry observability
 
 The free, self-hosted telemetry profile adds FastAPI request metrics and traces,
-outbound HTTPX traces (including Ollama calls), an OTLP Collector, Prometheus and
-a provisioned Grafana API dashboard. It is disabled during normal Compose
+outbound HTTPX traces (including Ollama calls), Docker container CPU/memory,
+running-state and restart-count gauges, an OTLP Collector, Prometheus and a
+provisioned Grafana dashboard. It is disabled during normal Compose
 startup. Prometheus keeps 7 days of metrics; traces are currently debug-exported
 to Collector logs and are not persisted to a trace database. Application OTLP
 logs are not enabled yet.
