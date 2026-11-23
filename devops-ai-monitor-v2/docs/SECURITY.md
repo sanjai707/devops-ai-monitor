@@ -66,7 +66,7 @@ VERIFIED LIMITATIONS:
   4318 to untrusted networks. This first local profile does not configure
   receiver authentication or TLS.
 - FastAPI and HTTPX instrumentation are enabled only when `OTEL_ENABLED=true`.
-  No request/response bodies or headers are configured for capture.
+  No request/response bodies or headers are captured; URL query values are redacted.
 - Grafana and Prometheus are localhost-only. Change the default Grafana password
   in `.env` before starting the telemetry profile.
 - Prometheus metrics are retained for 7 days in a dedicated named volume.
