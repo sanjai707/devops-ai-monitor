@@ -26,6 +26,31 @@ class TelemetryRuntime:
             except Exception:
                 logger.debug("OpenTelemetry provider shutdown failed", exc_info=True)
 
+def _sanitize_server_request(span, scope):
+    """Keep query-string values out of server spans."""
+    if not span or not span.is_recording():
+        return
+    headers = {
+        key.decode("latin1").lower(): value.decode("latin1")
+        for key, value in scope.get("headers", [])
+    }
+    server = scope.get("server") or ("localhost", None)
+    host = headers.get("host") or server[0]
+    scheme = scope.get("scheme", "http")
+    path = scope.get("path", "/")
+    span.set_attribute("url.full", f"{scheme}://{host}{path}")
+    span.set_attribute("url.query", "[REDACTED]" if scope.get("query_string") else "")
+
+
+def _sanitize_client_request(span, request):
+    """Remove query values from outbound HTTP span URLs."""
+    if not span or not span.is_recording():
+        return
+    safe_url = request.url.copy_with(query=None, fragment=None)
+    span.set_attribute("url.full", str(safe_url))
+    span.set_attribute("url.query", "[REDACTED]" if request.url.query else "")
+
+
 def configure_telemetry(app):
     """Enable FastAPI traces/metrics only when explicitly requested."""
     enabled = os.getenv("OTEL_ENABLED", "false").strip().lower() in {"1", "true", "yes", "on"}
@@ -67,10 +92,14 @@ def configure_telemetry(app):
         app,
         tracer_provider=tracer_provider,
         meter_provider=meter_provider,
+        server_request_hook=_sanitize_server_request,
         excluded_urls="/health,/telemetry/status",
     )
     httpx_instrumentor = HTTPXClientInstrumentor()
-    httpx_instrumentor.instrument(tracer_provider=tracer_provider)
+    httpx_instrumentor.instrument(
+        tracer_provider=tracer_provider,
+        request_hook=_sanitize_client_request,
+    )
     logger.info("OpenTelemetry enabled for %s; exporting OTLP/HTTP to %s", service_name, endpoint)
     return TelemetryRuntime(tracer_provider, meter_provider, httpx_instrumentor)
 
