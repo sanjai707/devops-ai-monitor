@@ -6,6 +6,8 @@ from datetime import datetime, timezone
 
 import docker
 
+from telemetry import record_container_observation
+
 from incident_manager import IncidentManager
 from thresholds import (
     CPU_WARNING_PERCENT,
@@ -254,6 +256,13 @@ class DockerMonitor:
     def _record_metric_sample(
         self, container, status, restart_count, health_status, metrics=None
     ):
+        record_container_observation(
+            container.id,
+            container.name,
+            status == "running",
+            restart_count,
+            metrics or {},
+        )
         try:
             self.database.record_metric_sample(
                 {
