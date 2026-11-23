@@ -31,7 +31,7 @@ curl.exe http://127.0.0.1:3000
 
 ## Independent audit status
 
-- 23 backend tests passed using isolated SQLite databases.
+- The pre-telemetry audit passed 23 backend tests using isolated SQLite databases. Three telemetry configuration tests were added in this branch but have not yet been executed.
 - TypeScript typecheck and frontend production build passed.
 - Local and production Compose files parsed successfully.
 - Host live API returned `api: ok`; Docker and Ollama were unavailable because
@@ -79,7 +79,9 @@ Local interfaces:
 - API telemetry status: http://127.0.0.1:8000/telemetry/status
 
 The FastAPI service exports HTTP request metrics and traces. Outbound HTTPX
-requests, including Ollama API calls, are traced. Prometheus retains metrics for
+requests, including Ollama API calls, are traced. The Docker monitor also exports
+per-container CPU utilization, memory utilization, running state and restart count
+gauges; observations expire when a container stops being observed. Prometheus retains metrics for
 7 days in the `prometheus-data` volume. Grafana is provisioned with a dashboard
 for request rate, p95 latency and HTTP 5xx rate.
 
