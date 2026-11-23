@@ -508,15 +508,38 @@ class IncidentDatabase:
         )
 
     def resolve_by_fingerprint(self, fingerprint, timestamp):
+        """Resolve every active incident for a recovered condition and audit it."""
+        active_statuses = ("open", "acknowledged", "investigating", "reopened")
         with self.lock, self.connect() as connection:
-            connection.execute(
+            connection.execute("BEGIN IMMEDIATE")
+            rows = connection.execute(
                 """
-                UPDATE incidents
-                SET status = 'resolved', resolved_at = ?, updated_at = ?
-                WHERE fingerprint = ? AND status IN ('open', 'acknowledged')
+                SELECT id, status FROM incidents
+                WHERE fingerprint = ? AND status IN
+                    ('open', 'acknowledged', 'investigating', 'reopened')
                 """,
-                (timestamp, timestamp, fingerprint),
-            )
+                (fingerprint,),
+            ).fetchall()
+            for row in rows:
+                connection.execute(
+                    """
+                    UPDATE incidents
+                    SET status = 'resolved', resolved_at = ?, updated_at = ?
+                    WHERE id = ? AND status = ?
+                    """,
+                    (timestamp, timestamp, row["id"], row["status"]),
+                )
+                self._record_incident_audit(
+                    connection,
+                    row["id"],
+                    row["status"],
+                    "resolved",
+                    "automatically_resolved",
+                    "Monitoring condition recovered; incident automatically resolved",
+                    "monitor",
+                    timestamp,
+                )
+            return len(rows)
 
     def store_docker_event(self, event):
         with self.lock, self.connect() as connection:
@@ -1222,11 +1245,13 @@ class IncidentDatabase:
             )
 
     def claim_investigation(self, max_attempts):
+        """Atomically claim one eligible queue item across threads/processes."""
         now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
         with self.lock, self.connect() as connection:
+            connection.execute("BEGIN IMMEDIATE")
             row = connection.execute(
                 """
-                SELECT * FROM investigations
+                SELECT id FROM investigations
                 WHERE (status = 'pending' OR (status = 'failed' AND attempts < ?))
                   AND (next_retry_at IS NULL OR next_retry_at <= ?)
                 ORDER BY id ASC LIMIT 1
@@ -1235,15 +1260,19 @@ class IncidentDatabase:
             ).fetchone()
             if row is None:
                 return None
-            connection.execute(
+            cursor = connection.execute(
                 """
                 UPDATE investigations
                 SET status = 'processing', attempts = attempts + 1, error_details = NULL,
                     updated_at = ?
                 WHERE id = ?
+                  AND (status = 'pending' OR (status = 'failed' AND attempts < ?))
+                  AND (next_retry_at IS NULL OR next_retry_at <= ?)
                 """,
-                (now, row["id"]),
+                (now, row["id"], max_attempts, now),
             )
+            if cursor.rowcount != 1:
+                return None
             claimed = connection.execute(
                 "SELECT * FROM investigations WHERE id = ?", (row["id"],)
             ).fetchone()
