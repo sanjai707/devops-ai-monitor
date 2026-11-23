@@ -51,6 +51,20 @@ For production-like Compose serving, rebuild `frontend\dist` with `npm.cmd run b
 
 ## Test
 
+Automated backend regression:
+
+```powershell
+python -m unittest discover -s tests -p "test_*.py" -v
+npm.cmd --prefix frontend run typecheck
+npm.cmd --prefix frontend run build
+docker compose config --quiet
+```
+
+The independent audit suite currently contains 23 backend tests covering
+database concurrency/migrations/retention/backup, incident and knowledge
+lifecycle, feedback, evidence validation, prompt-injection boundaries,
+authentication, remediation and expanded deterministic evaluation cases.
+
 ```powershell
 Invoke-RestMethod http://127.0.0.1:8000/health
 Invoke-RestMethod http://127.0.0.1:8000/containers | Format-Table id,name,image,status
@@ -99,7 +113,7 @@ To explicitly create a new investigation attempt for an incident, append `?force
 
 The Docker event collector reconnects with bounded backoff and deduplicates replayed events. SQLite retains Docker events for 14 days (maximum 20,000) and metric samples for 7 days (maximum 100,000); these defaults are configurable with `DOCKER_EVENT_RETENTION_DAYS` and `METRIC_RETENTION_DAYS`. Investigation evidence windows default to 10 minutes before and 5 minutes after the incident. Recent stdout/stderr logs are time-bounded, size-limited, and redacted. Container environment variables are never collected. Network metrics remain cumulative byte counters; they are not reported as throughput.
 
-The additive `docker_events`, `metric_samples`, and `operator_actions` tables are created automatically on startup; existing incidents and investigation history are preserved. SQLite `user_version` is advanced to 2 for the evidence-schema additions. When known action intent matters, record an explicit bounded annotation through `POST /incidents/{id}/operator-actions`; a Docker stop/kill event by itself remains intent-unknown.
+The additive evidence, incident audit, knowledge, feedback and evaluation tables are created automatically on startup; existing incidents and investigation history are preserved. SQLite `user_version` is advanced to 6 for the current schema. When known action intent matters, record an explicit bounded annotation through `POST /incidents/{id}/operator-actions`; a Docker stop/kill event by itself remains intent-unknown.
 
 Example explicit test-harness context (this records a supplied annotation only; it does not stop or change a container):
 

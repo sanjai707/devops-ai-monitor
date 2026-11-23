@@ -1,4 +1,5 @@
 import { AlertTriangle, BrainCircuit, ClipboardCheck, FileSearch, ListChecks, RotateCw, ShieldCheck } from 'lucide-react'
+import { useState } from 'react'
 import type { Incident, Investigation, InvestigationRecommendation } from '../types/api'
 import { formatDate } from '../utils/format'
 import { StatusBadge } from './StatusBadge'
@@ -10,6 +11,7 @@ type Props = {
   error: string | null
   busy: boolean
   onInvestigate: (id: number) => void
+  onFeedback: (feedbackType: string, userCorrection?: string) => void
 }
 
 function StringList({ title, items, icon: Icon, tone = '' }: {
@@ -27,8 +29,9 @@ function StringList({ title, items, icon: Icon, tone = '' }: {
   )
 }
 
-export function InvestigationPanel({ incident, investigation, loading, error, busy, onInvestigate }: Props) {
+export function InvestigationPanel({ incident, investigation, loading, error, busy, onInvestigate, onFeedback }: Props) {
   const result = investigation?.structured_json
+  const [correction, setCorrection] = useState('')
   const evidenceById = new Map((result?.evidence_inventory || []).map((item) => [item.id, item]))
 
   function EvidenceRefs({ ids }: { ids: string[] }) {
@@ -167,6 +170,33 @@ export function InvestigationPanel({ incident, investigation, loading, error, bu
                   <div>{result.evidence_inventory!.map((item) => <details className="evidence-inventory-item" key={item.id}><summary>{item.id} · {item.source_type} · {item.status} · {formatDate(item.event_timestamp)}</summary><pre>{JSON.stringify(item.payload, null, 2)}</pre><small>Collected {formatDate(item.collection_timestamp)} · {item.reliability}{item.limitations.length ? ` · ${item.limitations.join(' ')}` : ''}</small></details>)}</div>
                 </details>
               )}
+              <div className="investigation-feedback">
+                <h4>Investigation feedback</h4>
+                <div className="feedback-actions">
+                  <button onClick={() => onFeedback('helpful')}>Helpful</button>
+                  <button onClick={() => onFeedback('not_helpful')}>Not helpful</button>
+                  <button onClick={() => onFeedback('correct')}>Correct</button>
+                  <button onClick={() => onFeedback('incorrect')}>Incorrect</button>
+                  <button onClick={() => onFeedback('root_cause_confirmed')}>Root cause confirmed</button>
+                  <button onClick={() => onFeedback('root_cause_rejected')}>Root cause rejected</button>
+                </div>
+                <textarea
+                  value={correction}
+                  onChange={(event) => setCorrection(event.target.value)}
+                  placeholder="Optional correction. Corrections require human review before knowledge is approved."
+                  rows={3}
+                />
+                <button
+                  className="button-secondary"
+                  disabled={!correction.trim()}
+                  onClick={() => {
+                    onFeedback('user_correction', correction.trim())
+                    setCorrection('')
+                  }}
+                >
+                  Submit correction
+                </button>
+              </div>
               <div className="approval-note"><ShieldCheck size={15} /><span>Suggestions are advisory only. Human approval is always required; nothing is executed from this dashboard.</span></div>
             </div>
           )}

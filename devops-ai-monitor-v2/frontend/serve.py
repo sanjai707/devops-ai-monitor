@@ -39,6 +39,12 @@ class DashboardHandler(SimpleHTTPRequestHandler):
             return
         self.send_error(404)
 
+    def do_PUT(self):
+        if self._is_api_request():
+            self._proxy_api_request()
+            return
+        self.send_error(404)
+
     def _is_api_request(self):
         return urlsplit(self.path).path == "/api" or urlsplit(self.path).path.startswith("/api/")
 

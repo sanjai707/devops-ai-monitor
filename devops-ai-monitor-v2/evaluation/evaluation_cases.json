@@ -1,0 +1,223 @@
+{
+  "dataset_version": "2.0.0",
+  "cases": [
+    {
+      "id": "exit137-oom-false",
+      "model_output": {
+        "summary": "Container exited",
+        "root_cause": "SIGKILL",
+        "confidence": "high",
+        "confirmed_facts": [],
+        "hypotheses": [],
+        "evidence": [],
+        "missing_information": [],
+        "recommended_checks": [],
+        "suggested_remediation": [],
+        "requires_human_approval": true,
+        "findings": [
+          {
+            "claim": "Exit code 137 is consistent with SIGKILL",
+            "classification": "hypothesis",
+            "supporting_evidence_ids": ["INS-001"],
+            "contradictory_evidence_ids": []
+          }
+        ],
+        "contradictory_evidence": [],
+        "what_happened": "",
+        "what_changed": "",
+        "confidence_explanation": ""
+      },
+      "evidence_inventory": [
+        {"id":"INS-001","source_type":"inspection","status":"collected","payload":{"exit_code":137,"oom_killed":false}}
+      ],
+      "expect": {"confidence":"low","root_cause_insufficient":true}
+    },
+    {
+      "id": "unknown-evidence-id",
+      "model_output": {
+        "summary":"Unsupported claim",
+        "root_cause":"Network failure",
+        "confidence":"high",
+        "confirmed_facts":["Network failure occurred"],
+        "hypotheses":[],
+        "evidence":[],
+        "missing_information":[],
+        "recommended_checks":[],
+        "suggested_remediation":[],
+        "requires_human_approval":true,
+        "findings":[
+          {
+            "claim":"Network failure occurred",
+            "classification":"confirmed_fact",
+            "supporting_evidence_ids":["UNKNOWN-1"],
+            "contradictory_evidence_ids":[]
+          }
+        ],
+        "contradictory_evidence":[],
+        "what_happened":"",
+        "what_changed":"",
+        "confidence_explanation":"",
+        "read_only_checks":[],
+        "corrective_actions":[]
+      },
+      "evidence_inventory":[
+        {"id":"MET-001","source_type":"metric","status":"collected","payload":{"cpu_percent":10,"memory_percent":20}}
+      ],
+      "expect":{"confidence":"low","unsupported_claim_removed":true}
+    },
+    {
+      "id": "oom-contradiction",
+      "model_output": {
+        "root_cause":"OOM killed",
+        "summary":"Container likely OOM killed",
+        "confidence":"high",
+        "findings":[
+          {
+            "claim":"Container was killed by OOM",
+            "classification":"probable_explanation",
+            "supporting_evidence_ids":["INS-001"],
+            "contradictory_evidence_ids":[]
+          }
+        ],
+        "contradictory_evidence":[],
+        "requires_human_approval":true
+      },
+      "evidence_inventory":[
+        {"id":"INS-001","source_type":"inspection","status":"collected","payload":{"exit_code":137,"oom_killed":false}}
+      ],
+      "expect":{"confidence":"low","classification_not_confirmed":true}
+    },
+    {
+      "id":"verified-root-cause",
+      "model_output":{
+        "root_cause":"Container exceeded the configured memory limit",
+        "summary":"OOM evidence correlates with exit 137",
+        "confidence":"high",
+        "findings":[
+          {"claim":"The container was OOM killed","classification":"confirmed_fact","supporting_evidence_ids":["INS-001","EVT-001"],"contradictory_evidence_ids":[]}
+        ]
+      },
+      "evidence_inventory":[
+        {"id":"INS-001","source_type":"inspection","status":"collected","payload":{"exit_code":137,"oom_killed":true}},
+        {"id":"EVT-001","source_type":"docker_event","status":"collected","payload":{"action":"oom","attributes":{"exitCode":"137"}}}
+      ],
+      "expect":{"confidence":"medium","classification_confirmed":true}
+    },
+    {
+      "id":"operator-controlled-stop",
+      "model_output":{
+        "root_cause":"Operator stopped the container",
+        "summary":"Explicit operator annotation",
+        "confidence":"medium",
+        "findings":[
+          {"claim":"The container was stopped by a controlled test","classification":"confirmed_fact","supporting_evidence_ids":["ACT-001"],"contradictory_evidence_ids":[]}
+        ]
+      },
+      "evidence_inventory":[
+        {"id":"ACT-001","source_type":"operator_action","status":"collected","payload":{"action":"stop","result":"succeeded","source":"test_harness","context":"Controlled test stop"}}
+      ],
+      "expect":{"confidence":"low","classification_confirmed":true}
+    },
+    {
+      "id":"missing-historical-metrics",
+      "model_output":{
+        "root_cause":"Insufficient evidence to determine the root cause.",
+        "summary":"Metrics unavailable",
+        "confidence":"low",
+        "findings":[
+          {"claim":"No historical CPU samples were collected","classification":"confirmed_fact","supporting_evidence_ids":[],"contradictory_evidence_ids":[]}
+        ]
+      },
+      "evidence_inventory":[
+        {"id":"MET-001","source_type":"metric","status":"unavailable","payload":{}}
+      ],
+      "expect":{"confidence":"low","root_cause_insufficient":true}
+    },
+    {
+      "id":"contradictory-docker-annotations",
+      "model_output":{
+        "root_cause":"Operator action contradicts an OOM claim",
+        "summary":"Annotations conflict",
+        "confidence":"low",
+        "findings":[
+          {"claim":"An operator stop occurred","classification":"confirmed_fact","supporting_evidence_ids":["ACT-001"],"contradictory_evidence_ids":["INS-001"]}
+        ]
+      },
+      "evidence_inventory":[
+        {"id":"ACT-001","source_type":"operator_action","status":"collected","payload":{"action":"stop","result":"succeeded"}},
+        {"id":"INS-001","source_type":"inspection","status":"collected","payload":{"exit_code":137,"oom_killed":true}}
+      ],
+      "expect":{"confidence":"low","contradiction_present":true}
+    },
+    {
+      "id":"irrelevant-knowledge",
+      "model_output":{
+        "root_cause":"Insufficient evidence to determine the root cause.",
+        "summary":"Retrieved runbook was not infrastructure evidence",
+        "confidence":"low",
+        "findings":[
+          {"claim":"Restart policy is documented","classification":"confirmed_fact","supporting_evidence_ids":["KNO-001"],"contradictory_evidence_ids":[]}
+        ]
+      },
+      "evidence_inventory":[
+        {"id":"KNO-001","source_type":"knowledge","status":"collected","payload":{"title":"Restart runbook","content":"Documented restart procedure"}}
+      ],
+      "expect":{"confidence":"low","unsupported_claim_removed":true}
+    },
+    {
+      "id":"incorrect-network-recommendation",
+      "model_output":{
+        "root_cause":"Insufficient evidence to determine the root cause.",
+        "summary":"No network evidence",
+        "confidence":"low",
+        "read_only_checks":[
+          {"description":"Restart the container","reason":"Assume network recovery","evidence_ids":["NOT-REAL"],"expected_impact":"Unknown","risk_level":"high","required_approval":true,"verification_steps":["Check status"],"rollback_considerations":"Stop and restore prior state"}
+        ],
+        "findings":[]
+      },
+      "evidence_inventory":[
+        {"id":"MET-001","source_type":"metric","status":"collected","payload":{"cpu_percent":10}}
+      ],
+      "expect":{"recommendation_removed":true,"confidence":"low"}
+    },
+    {
+      "id":"docker-event-correlation",
+      "model_output":{
+        "root_cause":"Container exit correlated with a die event",
+        "summary":"Docker event and inspection correlate",
+        "confidence":"medium",
+        "findings":[
+          {"claim":"The container stopped with exit 137","classification":"probable_explanation","supporting_evidence_ids":["EVT-001","INS-001"],"contradictory_evidence_ids":[]}
+        ]
+      },
+      "evidence_inventory":[
+        {"id":"EVT-001","source_type":"docker_event","status":"collected","payload":{"action":"die","attributes":{"exitCode":"137"}}},
+        {"id":"INS-001","source_type":"inspection","status":"collected","payload":{"exit_code":137,"oom_killed":false}}
+      ],
+      "expect":{"confidence":"low","classification_not_confirmed":true}
+    },
+    {
+      "id":"oom-with-verification",
+      "model_output":{
+        "root_cause":"OOM killed",
+        "summary":"OOM confirmed",
+        "confidence":"high",
+        "findings":[
+          {"claim":"OOMKilled is true","classification":"confirmed_fact","supporting_evidence_ids":["INS-001"],"contradictory_evidence_ids":[]}
+        ]
+      },
+      "evidence_inventory":[
+        {"id":"INS-001","source_type":"inspection","status":"collected","payload":{"exit_code":137,"oom_killed":true}}
+      ],
+      "expect":{"confidence":"low","classification_confirmed":true}
+    },
+    {
+      "id": "malformed-output",
+      "model_output":{"root_cause":42,"confidence":"high"},
+      "evidence_inventory":[
+        {"id":"INS-001","source_type":"inspection","status":"collected","payload":{"exit_code":137,"oom_killed":false}}
+      ],
+      "expect":{"must_reject":true}
+    }
+  ]
+}

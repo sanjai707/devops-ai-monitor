@@ -51,3 +51,17 @@ class IncidentManager:
 
     def resolve_by_id(self, incident_id):
         return self.database.update_status(incident_id, "resolved", utc_now())
+
+    def investigating(self, incident_id):
+        return self.database.update_status(incident_id, "investigating", utc_now())
+
+    def reopen(self, incident_id):
+        return self.database.update_status(incident_id, "reopened", utc_now())
+
+    def suppress(self, incident_id, comment=None, actor="operator"):
+        incident = self.database.update_status(incident_id, "suppressed", utc_now())
+        if incident and comment:
+            incident = self.database.add_incident_comment(
+                incident_id, comment[:2000], actor[:80]
+            )
+        return incident

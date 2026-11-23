@@ -1,19 +1,23 @@
 import os
 from contextlib import asynccontextmanager
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Literal
 from typing import Optional
 
 import docker
 import httpx
 from fastapi import FastAPI, HTTPException, Query
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
+from starlette.responses import JSONResponse
 
 from ai_investigator import IncidentInvestigator, redact_log_secrets
 from database import IncidentDatabase
 from docker_event_collector import DockerEventCollector
 from incident_manager import IncidentManager
 from monitor import DockerMonitor
+from evaluation import run_evaluation
+from providers import DockerProvider
 
 APP_NAME = "DevOps AI Monitor"
 OLLAMA_URL = os.getenv("OLLAMA_URL", "http://host.docker.internal:11434")
@@ -31,6 +35,7 @@ docker_monitor = DockerMonitor(
     ),
 )
 docker_event_collector = DockerEventCollector(incident_database)
+docker_provider = DockerProvider()
 
 
 @asynccontextmanager
@@ -52,6 +57,37 @@ app = FastAPI(
     version="0.4.0",
     lifespan=lifespan,
 )
+
+cors_origins = [
+    origin.strip()
+    for origin in os.getenv(
+        "CORS_ALLOWED_ORIGINS",
+        "http://127.0.0.1:3000,http://localhost:3000",
+    ).split(",")
+    if origin.strip()
+]
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=cors_origins,
+    allow_credentials=False,
+    allow_methods=["GET", "POST", "PUT"],
+    allow_headers=["Accept", "Content-Type", "X-API-Key"],
+)
+
+
+@app.middleware("http")
+async def optional_api_key_middleware(request, call_next):
+    api_key = os.getenv("API_KEY", "").strip()
+    if api_key:
+        protected = request.method in ("POST", "PUT") or request.url.path.startswith(
+            "/knowledge"
+        )
+        if protected and request.headers.get("x-api-key") != api_key:
+            return JSONResponse(
+                status_code=401,
+                content={"detail": "A valid X-API-Key is required"},
+            )
+    return await call_next(request)
 
 def docker_client():
     try:
@@ -171,6 +207,57 @@ class OperatorActionRequest(BaseModel):
     occurred_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
+class IncidentCommentRequest(BaseModel):
+    comment: str = Field(..., min_length=1, max_length=2000)
+    actor: str = Field(default="operator", max_length=80)
+
+
+class KnowledgeRequest(BaseModel):
+    title: str = Field(..., min_length=1, max_length=200)
+    content: str = Field(..., min_length=1, max_length=10000)
+    category: str = Field(default="operational", max_length=80)
+    source: str = Field(default="operator", max_length=200)
+    incident_id: Optional[int] = None
+    verification_status: str = Field(default="unverified", max_length=40)
+    approval_status: str = Field(default="pending_review", max_length=40)
+    confidence: str = Field(default="low", max_length=20)
+    tags: list[str] = Field(default_factory=list)
+    changed_by: str = Field(default="operator", max_length=80)
+    change_reason: str = Field(default="created", max_length=300)
+
+
+class ReadOnlyCheckRequest(BaseModel):
+    action_id: Literal[
+        "docker.inspect-container",
+        "docker.container-events",
+        "docker.container-logs",
+    ]
+    container_id: str = Field(..., min_length=1, max_length=128)
+
+
+class InvestigationFeedbackRequest(BaseModel):
+    incident_id: Optional[int] = None
+    investigation_id: Optional[int] = None
+    original_query: str = Field(default="", max_length=5000)
+    model_response: dict = Field(default_factory=dict)
+    model_version: str = Field(default=OLLAMA_MODEL, max_length=100)
+    prompt_version: str = Field(default="evidence-grounded-v1", max_length=100)
+    retrieved_knowledge_ids: list[int] = Field(default_factory=list)
+    feedback_type: Literal[
+        "helpful",
+        "not_helpful",
+        "correct",
+        "incorrect",
+        "partially_correct",
+        "root_cause_confirmed",
+        "root_cause_rejected",
+        "recommendation_accepted",
+        "recommendation_rejected",
+        "user_correction",
+    ]
+    user_correction: Optional[str] = Field(default=None, max_length=10000)
+
+
 @app.post("/incidents/{incident_id}/operator-actions")
 def record_operator_action(incident_id: int, request: OperatorActionRequest):
     incident = incident_database.get(incident_id)
@@ -264,6 +351,28 @@ def container_metrics_endpoint(container_id: str):
     finally:
         client.close()
 
+
+@app.get("/containers/{container_id}/metric-history")
+def container_metric_history(
+    container_id: str,
+    minutes: int = Query(default=60, ge=5, le=10080),
+    limit: int = Query(default=720, ge=1, le=10000),
+):
+    end = datetime.now(timezone.utc)
+    start = end - timedelta(minutes=minutes)
+    start_at = start.strftime("%Y-%m-%dT%H:%M:%SZ")
+    end_at = end.strftime("%Y-%m-%dT%H:%M:%SZ")
+    history = incident_database.metric_history(
+        container_id, start_at, end_at, limit
+    )
+    summary = incident_database.metric_summary(container_id, start_at, end_at)
+    return {
+        "container_id": container_id,
+        "window": {"start": start_at, "end": end_at, "minutes": minutes},
+        "samples": history,
+        "summary": summary,
+    }
+
 @app.get("/monitor/status")
 def monitor_status():
     return docker_monitor.get_status()
@@ -280,9 +389,103 @@ def evidence_status():
     }
 
 
+@app.get("/providers/status")
+def providers_status():
+    return {
+        "providers": [
+            docker_provider.status(),
+            {
+                "provider": "kubernetes",
+                "enabled": os.getenv("KUBERNETES_ENABLED", "false").strip().lower() in ("1","true","yes"),
+                "connected": False,
+                "error": "Provider not configured",
+            },
+            {
+                "provider": "aws",
+                "enabled": os.getenv("AWS_ENABLED", "false").strip().lower() in ("1","true","yes"),
+                "connected": False,
+                "error": "Provider not configured",
+            },
+        ]
+    }
+
+
+@app.get("/remediation/status")
+def remediation_status():
+    disabled = os.getenv("REMEDIATION_DISABLED", "true").strip().lower() in (
+        "1", "true", "yes",
+    )
+    return {
+        "disabled": disabled,
+        "allowed_read_only_actions": [
+            "docker.inspect-container",
+            "docker.container-events",
+            "docker.container-logs",
+        ],
+        "autonomous_execution": False,
+        "human_approval_required": True,
+    }
+
+
+@app.post("/remediation/read-only-check")
+def run_read_only_check(request: ReadOnlyCheckRequest):
+    disabled = os.getenv("REMEDIATION_DISABLED", "true").strip().lower() in (
+        "1", "true", "yes",
+    )
+    if disabled:
+        raise HTTPException(
+            status_code=503,
+            detail="Remediation checks are disabled by REMEDIATION_DISABLED",
+        )
+    client = docker_client()
+    try:
+        container = get_container_or_404(client, request.container_id)
+        if request.action_id == "docker.inspect-container":
+            return {
+                "action_id": request.action_id,
+                "container": container.name,
+                "result": diagnostic_snapshot(container),
+                "executed": False,
+                "approved": False,
+            }
+        if request.action_id == "docker.container-events":
+            events = []
+            for event in client.events(
+                decode=True,
+                filters={"container": [container.id], "event": ["stop", "die", "kill", "oom", "restart", "health_status"]},
+                until=int(datetime.now(timezone.utc).timestamp()),
+                since=int((datetime.now(timezone.utc) - timedelta(hours=1)).timestamp()),
+            ):
+                events.append(event)
+                if len(events) >= 100:
+                    break
+            return {
+                "action_id": request.action_id,
+                "container": container.name,
+                "result": events,
+                "executed": False,
+                "approved": False,
+            }
+        logs = container.logs(tail=150, timestamps=True, stdout=True, stderr=True).decode(
+            "utf-8", errors="replace"
+        )
+        return {
+            "action_id": request.action_id,
+            "container": container.name,
+            "result": redact_log_secrets(logs[-20000:]),
+            "executed": False,
+            "approved": False,
+        }
+    finally:
+        client.close()
+
+
 @app.get("/incidents")
 def list_incidents(status: Optional[str] = Query(default=None)):
-    if status and status not in ("open", "acknowledged", "resolved"):
+    if status and status not in (
+        "open", "acknowledged", "investigating", "resolved",
+        "reopened", "suppressed",
+    ):
         raise HTTPException(status_code=400, detail="Invalid incident status")
     return incident_database.list(status=status)
 
@@ -298,6 +501,14 @@ def get_incident(incident_id: int):
     if not incident:
         raise HTTPException(status_code=404, detail="Incident not found")
     return incident
+
+
+@app.get("/incidents/{incident_id}/timeline")
+def incident_timeline(incident_id: int):
+    timeline = incident_database.incident_timeline(incident_id)
+    if timeline is None:
+        raise HTTPException(status_code=404, detail="Incident not found")
+    return timeline
 
 
 @app.post("/incidents/{incident_id}/acknowledge")
@@ -320,6 +531,52 @@ def resolve_incident(incident_id: int):
         return incident
     manager = IncidentManager(incident_database)
     return manager.resolve_by_id(incident_id)
+
+
+@app.post("/incidents/{incident_id}/investigating")
+def mark_incident_investigating(incident_id: int):
+    if not incident_database.get(incident_id):
+        raise HTTPException(status_code=404, detail="Incident not found")
+    return IncidentManager(incident_database).investigating(incident_id)
+
+
+@app.post("/incidents/{incident_id}/reopen")
+def reopen_incident(incident_id: int):
+    incident = incident_database.get(incident_id)
+    if not incident:
+        raise HTTPException(status_code=404, detail="Incident not found")
+    if incident["status"] not in ("resolved", "suppressed"):
+        raise HTTPException(status_code=409, detail="Only resolved or suppressed incidents can be reopened")
+    return IncidentManager(incident_database).reopen(incident_id)
+
+
+@app.post("/incidents/{incident_id}/suppress")
+def suppress_incident(incident_id: int, request: IncidentCommentRequest):
+    incident = incident_database.get(incident_id)
+    if not incident:
+        raise HTTPException(status_code=404, detail="Incident not found")
+    if incident["status"] == "resolved":
+        raise HTTPException(status_code=409, detail="Resolved incidents cannot be suppressed")
+    return IncidentManager(incident_database).suppress(
+        incident_id, request.comment, request.actor
+    )
+
+
+@app.post("/incidents/{incident_id}/comments")
+def comment_on_incident(incident_id: int, request: IncidentCommentRequest):
+    if not incident_database.get(incident_id):
+        raise HTTPException(status_code=404, detail="Incident not found")
+    incident = incident_database.add_incident_comment(
+        incident_id, request.comment, request.actor
+    )
+    return incident
+
+
+@app.get("/incidents/{incident_id}/audit")
+def incident_audit(incident_id: int):
+    if not incident_database.get(incident_id):
+        raise HTTPException(status_code=404, detail="Incident not found")
+    return incident_database.list_incident_audit(incident_id)
 
 
 @app.get("/incidents/{incident_id}/investigation")
@@ -352,6 +609,136 @@ def list_investigations(limit: int = Query(default=50, ge=1, le=200)):
 @app.get("/investigations/status")
 def investigation_status():
     return incident_investigator.get_status()
+
+
+@app.post("/evaluation/run")
+def run_evaluation_suite():
+    report = run_evaluation(
+        incident_investigator,
+        run_name="deterministic-evidence-regression",
+        prompt_version="evidence-grounded-v1",
+    )
+    return incident_database.store_evaluation_run(report)
+
+
+@app.get("/evaluation/runs")
+def list_evaluation_runs(limit: int = Query(default=50, ge=1, le=500)):
+    return incident_database.list_evaluation_runs(limit)
+
+
+@app.post("/knowledge")
+def create_knowledge(request: KnowledgeRequest):
+    return incident_database.create_knowledge(request.model_dump())
+
+
+@app.get("/knowledge")
+def list_knowledge(
+    status: Optional[str] = Query(default=None),
+    category: Optional[str] = Query(default=None),
+    limit: int = Query(default=100, ge=1, le=500),
+):
+    return incident_database.list_knowledge(status=status, category=category, limit=limit)
+
+
+@app.get("/knowledge/search")
+def search_knowledge(
+    q: str = Query(..., min_length=1, max_length=500),
+    approved_only: bool = Query(default=True),
+    limit: int = Query(default=20, ge=1, le=100),
+):
+    return incident_database.search_knowledge(
+        q, approved_only=approved_only, limit=limit
+    )
+
+
+@app.get("/knowledge/{knowledge_id}")
+def get_knowledge(knowledge_id: int):
+    record = incident_database.get_knowledge(knowledge_id)
+    if record is None:
+        raise HTTPException(status_code=404, detail="Knowledge record not found")
+    return record
+
+
+@app.put("/knowledge/{knowledge_id}")
+def update_knowledge(knowledge_id: int, request: KnowledgeRequest):
+    record = incident_database.update_knowledge(
+        knowledge_id,
+        request.model_dump(exclude={"changed_by", "change_reason"}),
+        changed_by=request.changed_by,
+        change_reason=request.change_reason,
+    )
+    if record is None:
+        raise HTTPException(status_code=404, detail="Knowledge record not found")
+    return record
+
+
+@app.post("/knowledge/{knowledge_id}/approve")
+def approve_knowledge(knowledge_id: int, actor: str = Query(default="operator", max_length=80)):
+    record = incident_database.approve_knowledge(knowledge_id, actor)
+    if record is None:
+        raise HTTPException(status_code=404, detail="Knowledge record not found")
+    return record
+
+
+@app.post("/knowledge/{knowledge_id}/reject")
+def reject_knowledge(knowledge_id: int, actor: str = Query(default="operator", max_length=80)):
+    record = incident_database.reject_knowledge(knowledge_id, actor)
+    if record is None:
+        raise HTTPException(status_code=404, detail="Knowledge record not found")
+    return record
+
+
+@app.post("/knowledge/{knowledge_id}/deprecate")
+def deprecate_knowledge(knowledge_id: int, actor: str = Query(default="operator", max_length=80)):
+    record = incident_database.deprecate_knowledge(knowledge_id, actor)
+    if record is None:
+        raise HTTPException(status_code=404, detail="Knowledge record not found")
+    return record
+
+
+@app.get("/knowledge/{knowledge_id}/history")
+def knowledge_history(knowledge_id: int):
+    if incident_database.get_knowledge(knowledge_id) is None:
+        raise HTTPException(status_code=404, detail="Knowledge record not found")
+    return incident_database.knowledge_history(knowledge_id)
+
+
+@app.post("/feedback")
+def submit_feedback(request: InvestigationFeedbackRequest):
+    if request.incident_id is not None and incident_database.get(request.incident_id) is None:
+        raise HTTPException(status_code=404, detail="Incident not found")
+    if request.investigation_id is not None:
+        investigation = next(
+            (
+                item for item in incident_database.list_investigations(limit=200)
+                if item["id"] == request.investigation_id
+            ),
+            None,
+        )
+        if investigation is None:
+            raise HTTPException(status_code=404, detail="Investigation not found")
+    return incident_database.create_feedback(request.model_dump())
+
+
+@app.get("/feedback")
+def list_feedback(limit: int = Query(default=100, ge=1, le=500)):
+    return incident_database.list_feedback(limit)
+
+
+@app.get("/feedback/analytics")
+def feedback_analytics():
+    return incident_database.feedback_analytics()
+
+
+@app.post("/feedback/{feedback_id}/review")
+def review_feedback(
+    feedback_id: int,
+    review_status: str = Query(..., pattern="^(reviewed|rejected)$"),
+):
+    record = incident_database.review_feedback(feedback_id, review_status)
+    if record is None:
+        raise HTTPException(status_code=404, detail="Feedback not found")
+    return record
 
 
 @app.get("/containers/{container_id}/logs")

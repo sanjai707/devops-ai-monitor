@@ -8,6 +8,8 @@ from ai_investigator import IncidentInvestigator, InvestigationError
 from database import IncidentDatabase
 from docker_event_collector import DockerEventCollector
 from monitor import DockerMonitor
+from evaluation import run_evaluation
+from providers import DockerProvider
 
 
 class EventDatabase:
@@ -20,6 +22,116 @@ class EventDatabase:
 
 
 class EvidencePipelineTests(unittest.TestCase):
+    def test_docker_provider_reports_unavailable_without_crashing(self):
+        provider = DockerProvider()
+        with patch("providers.docker_provider.docker.from_env", side_effect=RuntimeError("daemon unavailable")):
+            status = provider.status()
+        self.assertEqual(status["provider"], "docker")
+        self.assertFalse(status["connected"])
+        self.assertEqual(status["error"], "RuntimeError")
+
+    def test_repeatable_evaluation_dataset(self):
+        investigator = IncidentInvestigator.__new__(IncidentInvestigator)
+        investigator.model_name = "qwen2.5:3b"
+        report = run_evaluation(investigator)
+        self.assertGreaterEqual(report["total"], 10)
+        self.assertGreaterEqual(report["passed"], 10)
+
+    def test_feedback_correction_requires_review_before_knowledge(self):
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as directory:
+            database = IncidentDatabase(str(Path(directory) / "incidents.db"))
+            feedback = database.create_feedback({
+                "incident_id": 10,
+                "investigation_id": 18,
+                "original_query": "Investigate incident 10",
+                "model_response": {"root_cause": "unknown"},
+                "model_version": "qwen2.5:3b",
+                "prompt_version": "evidence-grounded-v1",
+                "retrieved_knowledge_ids": [1],
+                "feedback_type": "user_correction",
+                "user_correction": "The container was intentionally stopped by a controlled test.",
+            })
+            self.assertEqual(feedback["review_status"], "pending_review")
+            self.assertIsNotNone(feedback["proposed_knowledge_id"])
+            proposed = database.get_knowledge(feedback["proposed_knowledge_id"])
+            self.assertEqual(proposed["approval_status"], "pending_review")
+            self.assertEqual(database.search_knowledge("controlled test", approved_only=True), [])
+            analytics = database.feedback_analytics()
+            self.assertEqual(analytics["pending_correction_feedback"], 1)
+            reviewed = database.review_feedback(feedback["id"], "reviewed")
+            self.assertEqual(reviewed["review_status"], "reviewed")
+
+    def test_knowledge_lifecycle_and_search_require_approval(self):
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as directory:
+            database = IncidentDatabase(str(Path(directory) / "incidents.db"))
+            record = database.create_knowledge({
+                "title": "Container restart runbook",
+                "content": "Review restart policy and logs before restarting.",
+                "category": "runbook",
+                "source": "operator",
+                "incident_id": None,
+                "verification_status": "unverified",
+                "approval_status": "pending_review",
+                "confidence": "medium",
+                "tags": ["restart", "docker"],
+            })
+            self.assertEqual(record["approval_status"], "pending_review")
+            self.assertEqual(database.search_knowledge("restart", approved_only=True), [])
+            approved = database.approve_knowledge(record["id"], "reviewer")
+            self.assertEqual(approved["approval_status"], "approved")
+            self.assertEqual(approved["verification_status"], "verified")
+            results = database.search_knowledge("restart", approved_only=True)
+            self.assertEqual(results[0]["id"], record["id"])
+            history = database.knowledge_history(record["id"])
+            self.assertGreaterEqual(len(history), 2)
+            rejected = database.reject_knowledge(record["id"], "reviewer")
+            self.assertEqual(rejected["approval_status"], "rejected")
+            self.assertEqual(database.search_knowledge("restart", approved_only=True), [])
+
+    def test_incident_lifecycle_is_audited_and_occurrences_are_counted(self):
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as directory:
+            database = IncidentDatabase(str(Path(directory) / "incidents.db"))
+            incident = database.create({
+                "fingerprint": "lifecycle-test",
+                "container_id": "container-full-id",
+                "container_name": "sample",
+                "type": "cpu_usage",
+                "severity": "warning",
+                "title": "High CPU",
+                "status": "open",
+                "evidence": {"cpu_percent": 90},
+                "created_at": "2026-11-21T10:00:00Z",
+                "updated_at": "2026-11-21T10:00:00Z",
+            })
+            incident = database.update(
+                incident["id"], "critical", "Critical CPU",
+                {"cpu_percent": 96}, "2026-11-21T10:00:10Z"
+            )
+            self.assertEqual(incident["event_count"], 2)
+            self.assertEqual(incident["first_seen_at"], "2026-11-21T10:00:00Z")
+            incident = database.update_status(
+                incident["id"], "acknowledged", "2026-11-21T10:01:00Z"
+            )
+            incident = database.update_status(
+                incident["id"], "investigating", "2026-11-21T10:02:00Z"
+            )
+            incident = database.update_status(
+                incident["id"], "resolved", "2026-11-21T10:03:00Z"
+            )
+            incident = database.update_status(
+                incident["id"], "reopened", "2026-11-21T10:04:00Z"
+            )
+            incident = database.add_incident_comment(
+                incident["id"], "CPU returned; operator review required", "sre"
+            )
+            audit = database.list_incident_audit(incident["id"])
+            actions = [item["action"] for item in audit]
+            self.assertIn("created", actions)
+            self.assertIn("status_changed", actions)
+            self.assertIn("comment", actions)
+            self.assertGreaterEqual(len(audit), 6)
+            self.assertEqual(incident["status"], "reopened")
+
     def test_sqlite_event_deduplication_and_metric_window(self):
         with tempfile.TemporaryDirectory() as directory:
             database = IncidentDatabase(str(Path(directory) / "incidents.db"))
@@ -48,13 +160,29 @@ class EvidencePipelineTests(unittest.TestCase):
                 "restart_count": 1,
                 "health_status": None,
             })
+            database.record_metric_sample({
+                "container_id": "container-full-id",
+                "container_name": "sample",
+                "observed_at": "2026-11-21T10:00:06Z",
+                "cpu_percent": 15.5,
+                "memory_usage_bytes": 150,
+                "memory_limit_bytes": 1000,
+                "memory_percent": 15.0,
+                "network_rx_bytes": 1300,
+                "network_tx_bytes": 2400,
+                "running": False,
+                "restart_count": 1,
+                "health_status": None,
+            })
             events, metrics = database.evidence_window(
                 "container", "2026-11-21T09:59:00Z", "2026-11-21T10:01:00Z"
             )
             self.assertEqual(len(events), 1)
             self.assertEqual(events[0]["attributes"]["exitCode"], "137")
-            self.assertEqual(len(metrics), 1)
+            self.assertEqual(len(metrics), 2)
             self.assertEqual(metrics[0]["cpu_percent"], 12.5)
+            self.assertEqual(metrics[1]["network_rx_rate_bytes_per_sec"], 1000.0)
+            self.assertEqual(metrics[1]["network_tx_rate_bytes_per_sec"], 2000.0)
             database.create({
                 "fingerprint": "test",
                 "container_id": "container-full-id",

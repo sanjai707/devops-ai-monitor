@@ -9,7 +9,7 @@ import {
   YAxis,
 } from 'recharts'
 import { formatBytes, formatDate, formatPercent } from '../utils/format'
-import type { ContainerMetrics, MetricPoint } from '../types/api'
+import type { ContainerMetrics, MetricHistoryResponse, MetricPoint } from '../types/api'
 
 type ChartDatum = {
   time: string
@@ -17,6 +17,8 @@ type ChartDatum = {
   memory: number
   networkRx: number
   networkTx: number
+  networkRxRate: number
+  networkTxRate: number
 }
 
 type Props = {
@@ -24,6 +26,7 @@ type Props = {
   history: MetricPoint[]
   containerName?: string
   loading: boolean
+  persistedHistory?: MetricHistoryResponse | null
 }
 
 function UsageChart({ title, dataKey, color, data, formatter }: {
@@ -79,14 +82,26 @@ function CurrentValue({ icon: Icon, label, value, tone }: {
   )
 }
 
-export function MetricCharts({ metrics, history, containerName, loading }: Props) {
-  const data = history.flatMap((point) => point.metrics ? [{
+export function MetricCharts({ metrics, history, containerName, loading, persistedHistory }: Props) {
+  const persistedData = (persistedHistory?.samples || []).flatMap((sample) => sample.observed_at ? [{
+    time: new Date(sample.observed_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+    cpu: sample.cpu_percent ?? 0,
+    memory: sample.memory_percent ?? 0,
+    networkRx: sample.network_rx_bytes ?? 0,
+    networkTx: sample.network_tx_bytes ?? 0,
+    networkRxRate: sample.network_rx_rate_bytes_per_sec ?? 0,
+    networkTxRate: sample.network_tx_rate_bytes_per_sec ?? 0,
+  }] : [])
+  const rollingData = history.flatMap((point) => point.metrics ? [{
     time: new Date(point.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
     cpu: point.metrics.cpu_percent,
     memory: point.metrics.memory_percent,
     networkRx: point.metrics.network_rx_bytes,
     networkTx: point.metrics.network_tx_bytes,
+    networkRxRate: 0,
+    networkTxRate: 0,
   }] : [])
+  const data = persistedData.length ? persistedData : rollingData
   const available = Boolean(metrics)
   const rx = metrics?.network_rx_bytes
   const tx = metrics?.network_tx_bytes
@@ -113,6 +128,8 @@ export function MetricCharts({ metrics, history, containerName, loading }: Props
         <UsageChart title="Memory utilization" dataKey="memory" color="#aa8cff" data={data} formatter={(value) => `${value.toFixed(0)}%`} />
         <UsageChart title="Network RX · cumulative" dataKey="networkRx" color="#4bc795" data={data} formatter={formatBytes} />
         <UsageChart title="Network TX · cumulative" dataKey="networkTx" color="#f2b84b" data={data} formatter={formatBytes} />
+        <UsageChart title="Network RX · throughput" dataKey="networkRxRate" color="#72aeb4" data={data} formatter={(value) => `${formatBytes(value)}/s`} />
+        <UsageChart title="Network TX · throughput" dataKey="networkTxRate" color="#c49a69" data={data} formatter={(value) => `${formatBytes(value)}/s`} />
       </div>
       <div className="network-note">
         <span><ArrowDownToLine size={13} /> RX <b>{available ? formatBytes(rx) : 'Unavailable'}</b></span>

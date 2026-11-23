@@ -58,7 +58,13 @@ export type MonitorStatus = {
   containers_observed: number
 }
 
-export type IncidentStatus = 'open' | 'acknowledged' | 'resolved'
+export type IncidentStatus =
+  | 'open'
+  | 'acknowledged'
+  | 'investigating'
+  | 'resolved'
+  | 'reopened'
+  | 'suppressed'
 export type Severity = 'critical' | 'warning' | 'info' | string
 
 export type Incident = {
@@ -75,6 +81,9 @@ export type Incident = {
   updated_at: string
   acknowledged_at: string | null
   resolved_at: string | null
+  first_seen_at?: string
+  last_seen_at?: string
+  event_count?: number
 }
 
 export type InvestigationResult = {
@@ -165,4 +174,71 @@ export type InvestigationStatus = {
 export type MetricPoint = {
   timestamp: number
   metrics: ContainerMetrics | null
+}
+
+export type PersistedMetricSample = {
+  id: number
+  container_id: string
+  container_name: string
+  observed_at: string
+  cpu_percent: number | null
+  memory_usage_bytes: number | null
+  memory_limit_bytes: number | null
+  memory_percent: number | null
+  network_rx_bytes: number | null
+  network_tx_bytes: number | null
+  network_rx_rate_bytes_per_sec: number | null
+  network_tx_rate_bytes_per_sec: number | null
+  counter_reset: number
+  running: number
+  restart_count: number
+  health_status: string | null
+}
+
+export type MetricHistoryResponse = {
+  container_id: string
+  window: { start: string; end: string; minutes: number }
+  samples: PersistedMetricSample[]
+  summary: {
+    sample_count: number
+    first_sample_at: string | null
+    last_sample_at: string | null
+    avg_cpu_percent: number | null
+    max_cpu_percent: number | null
+    avg_memory_percent: number | null
+    max_memory_percent: number | null
+    max_restart_count: number | null
+    counter_resets: number
+  }
+}
+
+export type KnowledgeRecord = {
+  id: number
+  title: string
+  content: string
+  category: string
+  source: string
+  incident_id: number | null
+  verification_status: string
+  approval_status: 'proposed' | 'pending_review' | 'approved' | 'rejected' | 'deprecated' | string
+  confidence: string
+  version: number
+  tags: string[]
+  created_at: string
+  updated_at: string
+}
+
+export type InvestigationFeedback = {
+  incident_id: number | null
+  investigation_id: number | null
+  original_query: string
+  model_response: Record<string, unknown>
+  model_version: string
+  prompt_version: string
+  retrieved_knowledge_ids: number[]
+  feedback_type: string
+  user_correction: string | null
+  occurred_at: string
+  review_status: string
+  proposed_knowledge_id: number | null
 }

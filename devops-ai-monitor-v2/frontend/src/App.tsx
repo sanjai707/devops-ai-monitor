@@ -13,6 +13,7 @@ import {
   Server,
   ShieldAlert,
   Zap,
+  BookOpenCheck,
 } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
 import { ContainerTable } from './components/ContainerTable'
@@ -20,6 +21,7 @@ import { ContainerDetails } from './components/ContainerDetails'
 import { IncidentCenter } from './components/IncidentCenter'
 import { InvestigationHistory } from './components/InvestigationHistory'
 import { InvestigationPanel } from './components/InvestigationPanel'
+import { KnowledgeCenter } from './components/KnowledgeCenter'
 import { MetricCard } from './components/MetricCard'
 import { MetricCharts } from './components/MetricCharts'
 import { SectionHeading } from './components/SectionHeading'
@@ -30,6 +32,7 @@ import { api } from './services/api'
 import type {
   ContainerDiagnostics,
   Investigation,
+  MetricHistoryResponse,
 } from './types/api'
 import { formatDate } from './utils/format'
 
@@ -38,6 +41,7 @@ const navigation = [
   { label: 'Infrastructure', href: '#infrastructure', icon: Server },
   { label: 'Incident center', href: '#incidents', icon: ShieldAlert },
   { label: 'AI investigations', href: '#investigations', icon: BrainCircuit },
+  { label: 'Knowledge Center', href: '#knowledge', icon: BookOpenCheck },
 ]
 
 export default function App() {
@@ -47,6 +51,7 @@ export default function App() {
   const loadIncidents = useCallback((signal: AbortSignal) => api.incidents(signal), [])
   const loadInvestigations = useCallback((signal: AbortSignal) => api.investigations(signal), [])
   const loadInvestigationStatus = useCallback((signal: AbortSignal) => api.investigationStatus(signal), [])
+  const loadKnowledge = useCallback((signal: AbortSignal) => api.knowledge(signal), [])
 
   const healthState = usePolling(loadHealth, 10_000)
   const containersState = usePolling(loadContainers, 10_000)
@@ -54,6 +59,7 @@ export default function App() {
   const incidentsState = usePolling(loadIncidents, 10_000)
   const investigationsState = usePolling(loadInvestigations, 10_000)
   const queueState = usePolling(loadInvestigationStatus, 5_000)
+  const knowledgeState = usePolling(loadKnowledge, 15_000)
 
   const containers = containersState.data || []
   const incidents = incidentsState.data || []
@@ -80,6 +86,7 @@ export default function App() {
   const [selectedIncidentId, setSelectedIncidentId] = useState<number | null>(null)
   const [busyIncidentId, setBusyIncidentId] = useState<number | null>(null)
   const [manualBusy, setManualBusy] = useState(false)
+  const [knowledgeBusyId, setKnowledgeBusyId] = useState<number | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
   const selectedIncident = incidents.find((incident) => incident.id === selectedIncidentId) || null
 
@@ -120,9 +127,22 @@ export default function App() {
   const selectedMetrics = selectedContainerId ? metricState.metrics[selectedContainerId] || null : null
   const selectedContainer = containers.find((container) => container.id === selectedContainerId)
   const selectedHistory = selectedContainerId ? metricState.history[selectedContainerId] || [] : []
+  const metricHistoryLoader = useCallback(
+    (signal: AbortSignal) => selectedContainerId
+      ? api.metricHistory(selectedContainerId, 60, signal)
+      : Promise.resolve(null),
+    [selectedContainerId],
+  )
+  const persistedMetricHistoryState = usePolling<MetricHistoryResponse | null>(
+    metricHistoryLoader,
+    10_000,
+    [selectedContainerId],
+  )
 
   const unhealthyCount = Object.values(diagnosticsState.data || {}).filter((item) => item?.health_status === 'unhealthy').length
-  const activeIncidents = incidents.filter((incident) => incident.status !== 'resolved')
+  const activeIncidents = incidents.filter((incident) =>
+    !['resolved', 'suppressed'].includes(incident.status),
+  )
   const criticalIncidents = activeIncidents.filter((incident) => incident.severity === 'critical')
   const stoppedCount = containers.filter((container) => container.status.toLowerCase() !== 'running').length
   const lastRefresh = Math.max(
@@ -157,6 +177,84 @@ export default function App() {
     }
   }
 
+  const handleInvestigating = async (id: number) => {
+    setBusyIncidentId(id)
+    setActionError(null)
+    try {
+      await api.markInvestigating(id)
+      incidentsState.refresh()
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : 'Unable to mark incident as investigating')
+    } finally {
+      setBusyIncidentId(null)
+    }
+  }
+
+  const handleReopen = async (id: number) => {
+    setBusyIncidentId(id)
+    setActionError(null)
+    try {
+      await api.reopenIncident(id)
+      incidentsState.refresh()
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : 'Unable to reopen incident')
+    } finally {
+      setBusyIncidentId(null)
+    }
+  }
+
+  const handleSuppress = async (id: number) => {
+    setBusyIncidentId(id)
+    setActionError(null)
+    try {
+      await api.suppressIncident(id, 'Suppressed by dashboard operator')
+      incidentsState.refresh()
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : 'Unable to suppress incident')
+    } finally {
+      setBusyIncidentId(null)
+    }
+  }
+
+  const handleKnowledgeApprove = async (id: number) => {
+    setKnowledgeBusyId(id)
+    setActionError(null)
+    try {
+      await api.approveKnowledge(id)
+      knowledgeState.refresh()
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : 'Unable to approve knowledge')
+    } finally {
+      setKnowledgeBusyId(null)
+    }
+  }
+
+  const handleKnowledgeReject = async (id: number) => {
+    setKnowledgeBusyId(id)
+    setActionError(null)
+    try {
+      await api.rejectKnowledge(id)
+      knowledgeState.refresh()
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : 'Unable to reject knowledge')
+    } finally {
+      setKnowledgeBusyId(null)
+    }
+  }
+
+  const handleKnowledgeDeprecate = async (id: number) => {
+    setKnowledgeBusyId(id)
+    setActionError(null)
+    try {
+      await api.deprecateKnowledge(id)
+      knowledgeState.refresh()
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : 'Unable to deprecate knowledge')
+    } finally {
+      setKnowledgeBusyId(null)
+    }
+  }
+
   const handleInvestigate = async (id: number) => {
     setManualBusy(true)
     setActionError(null)
@@ -169,6 +267,31 @@ export default function App() {
       setActionError(error instanceof Error ? error.message : 'Unable to queue investigation')
     } finally {
       setManualBusy(false)
+    }
+  }
+
+  const handleInvestigationFeedback = async (feedbackType: string, userCorrection?: string) => {
+    if (!selectedIncident || !displayedInvestigation) return
+    const result = displayedInvestigation.structured_json
+    const retrievedKnowledgeIds = (result?.evidence_inventory || [])
+      .filter((item) => item.source_type === 'knowledge')
+      .map((item) => Number(item.payload?.knowledge_id))
+      .filter((id) => Number.isFinite(id))
+    try {
+      await api.submitFeedback({
+        incident_id: selectedIncident.id,
+        investigation_id: displayedInvestigation.id,
+        original_query: `Investigate incident ${selectedIncident.id}: ${selectedIncident.title}`,
+        model_response: result || {},
+        model_version: displayedInvestigation.model_name || 'qwen2.5:3b',
+        prompt_version: 'evidence-grounded-v1',
+        retrieved_knowledge_ids: retrievedKnowledgeIds,
+        feedback_type: feedbackType,
+        user_correction: userCorrection,
+      })
+      setActionError(null)
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : 'Unable to submit investigation feedback')
     }
   }
 
@@ -215,7 +338,7 @@ export default function App() {
             <span className="local-badge"><span /> LOCAL ENVIRONMENT</span>
             <span className="topbar-divider" />
             <span className="topbar-clock">{lastRefresh ? `Updated ${formatDate(lastRefresh)}` : 'Connecting…'}</span>
-            <button className="icon-button refresh-button" title="Refresh dashboard data" onClick={() => { healthState.refresh(); containersState.refresh(); monitorState.refresh(); incidentsState.refresh(); investigationsState.refresh(); queueState.refresh() }}><RefreshCw size={15} /></button>
+            <button className="icon-button refresh-button" title="Refresh dashboard data" onClick={() => { healthState.refresh(); containersState.refresh(); monitorState.refresh(); incidentsState.refresh(); investigationsState.refresh(); queueState.refresh(); knowledgeState.refresh() }}><RefreshCw size={15} /></button>
           </div>
         </header>
 
@@ -267,6 +390,7 @@ export default function App() {
               <MetricCharts
                 metrics={selectedMetrics}
                 history={selectedHistory}
+                persistedHistory={persistedMetricHistoryState.data}
                 containerName={selectedContainer?.name}
                 loading={metricState.loading}
               />
@@ -282,6 +406,9 @@ export default function App() {
                 onSelect={(incident) => setSelectedIncidentId(incident.id)}
                 onAcknowledge={handleAcknowledge}
                 onResolve={handleResolve}
+                onInvestigating={handleInvestigating}
+                onReopen={handleReopen}
+                onSuppress={handleSuppress}
               />
             </section>
             <section id="investigations" className="grid-span-full">
@@ -294,6 +421,7 @@ export default function App() {
                   error={selectedInvestigationState.error}
                   busy={manualBusy}
                   onInvestigate={handleInvestigate}
+                  onFeedback={handleInvestigationFeedback}
                 />
                 <InvestigationHistory
                   investigations={investigations}
@@ -308,6 +436,17 @@ export default function App() {
               {investigationsState.error && <div className="inline-notice"><AlertCircle size={15} /> Investigation history unavailable: {investigationsState.error}</div>}
               {queueState.error && <div className="inline-notice"><AlertCircle size={15} /> Investigation worker status unavailable: {queueState.error}</div>}
             </section>
+              <section id="knowledge" className="grid-span-full">
+                <SectionHeading eyebrow="PERSISTENT MEMORY" title="Knowledge Center" description="Approved operational knowledge can be retrieved by future investigations." />
+                <KnowledgeCenter
+                  records={knowledgeState.data || []}
+                  loading={knowledgeState.loading}
+                  busyId={knowledgeBusyId}
+                  onApprove={handleKnowledgeApprove}
+                  onReject={handleKnowledgeReject}
+                  onDeprecate={handleKnowledgeDeprecate}
+                />
+              </section>
           </div>
 
           <footer className="page-footer">

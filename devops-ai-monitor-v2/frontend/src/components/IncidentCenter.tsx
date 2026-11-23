@@ -12,15 +12,24 @@ type Props = {
   onSelect: (incident: Incident) => void
   onAcknowledge: (id: number) => void
   onResolve: (id: number) => void
+  onInvestigating: (id: number) => void
+  onReopen: (id: number) => void
+  onSuppress: (id: number) => void
 }
 
-export function IncidentCenter({ incidents, loading, selectedId, busyId, onSelect, onAcknowledge, onResolve }: Props) {
+export function IncidentCenter({ incidents, loading, selectedId, busyId, onSelect, onAcknowledge, onResolve, onInvestigating, onReopen, onSuppress }: Props) {
   const [severityFilter, setSeverityFilter] = useState('all')
   const [statusFilter, setStatusFilter] = useState('active')
-  const activeCount = incidents.filter((incident) => incident.status !== 'resolved').length
+  const activeCount = incidents.filter((incident) =>
+    !['resolved', 'suppressed'].includes(incident.status),
+  ).length
   const filtered = useMemo(() => incidents.filter((incident) => {
     const severityMatch = severityFilter === 'all' || incident.severity === severityFilter
-    const statusMatch = statusFilter === 'all' || (statusFilter === 'active' ? incident.status !== 'resolved' : incident.status === statusFilter)
+    const statusMatch = statusFilter === 'all' || (
+      statusFilter === 'active'
+        ? !['resolved', 'suppressed'].includes(incident.status)
+        : incident.status === statusFilter
+    )
     return severityMatch && statusMatch
   }), [incidents, severityFilter, statusFilter])
 
@@ -34,7 +43,7 @@ export function IncidentCenter({ incidents, loading, selectedId, busyId, onSelec
         </div>
         <div className="table-controls">
           <label className="select-with-icon"><Filter size={14} /><select aria-label="Filter incidents by severity" value={severityFilter} onChange={(event) => setSeverityFilter(event.target.value)}><option value="all">All severity</option><option value="critical">Critical</option><option value="warning">Warning</option></select></label>
-          <select aria-label="Filter incidents by status" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}><option value="active">Active</option><option value="all">All incidents</option><option value="open">Open</option><option value="acknowledged">Acknowledged</option><option value="resolved">Resolved</option></select>
+          <select aria-label="Filter incidents by status" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}><option value="active">Active</option><option value="all">All incidents</option><option value="open">Open</option><option value="acknowledged">Acknowledged</option><option value="investigating">Investigating</option><option value="reopened">Reopened</option><option value="resolved">Resolved</option><option value="suppressed">Suppressed</option></select>
         </div>
       </div>
       <div className="table-wrap">
@@ -51,7 +60,10 @@ export function IncidentCenter({ incidents, loading, selectedId, busyId, onSelec
                 <td>
                   <div className="row-actions">
                     {incident.status === 'open' && <button className="small-action" disabled={busyId === incident.id} onClick={(event) => { event.stopPropagation(); onAcknowledge(incident.id) }}><Check size={13} /> Ack</button>}
+                    {(incident.status === 'open' || incident.status === 'acknowledged') && <button className="small-action" disabled={busyId === incident.id} onClick={(event) => { event.stopPropagation(); onInvestigating(incident.id) }}>Investigating</button>}
                     {incident.status !== 'resolved' && <button className="small-action resolve-action" disabled={busyId === incident.id} onClick={(event) => { event.stopPropagation(); onResolve(incident.id) }}><CheckCheck size={13} /> Resolve</button>}
+                    {(incident.status === 'resolved' || incident.status === 'suppressed') && <button className="small-action" disabled={busyId === incident.id} onClick={(event) => { event.stopPropagation(); onReopen(incident.id) }}>Reopen</button>}
+                    {(incident.status === 'open' || incident.status === 'acknowledged') && <button className="small-action" disabled={busyId === incident.id} onClick={(event) => { event.stopPropagation(); onSuppress(incident.id) }}>Suppress</button>}
                   </div>
                 </td>
               </tr>
