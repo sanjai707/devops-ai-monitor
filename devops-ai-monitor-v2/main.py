@@ -18,6 +18,7 @@ from incident_manager import IncidentManager
 from monitor import DockerMonitor
 from evaluation import run_evaluation
 from providers import DockerProvider
+from telemetry import configure_telemetry, get_telemetry_status
 
 APP_NAME = "DevOps AI Monitor"
 OLLAMA_URL = os.getenv("OLLAMA_URL", "http://host.docker.internal:11434")
@@ -49,6 +50,8 @@ async def lifespan(app: FastAPI):
         docker_monitor.stop()
         docker_event_collector.stop()
         incident_investigator.stop()
+        if telemetry_runtime is not None:
+            telemetry_runtime.shutdown()
 
 
 app = FastAPI(
@@ -57,6 +60,7 @@ app = FastAPI(
     version="0.4.0",
     lifespan=lifespan,
 )
+telemetry_runtime = configure_telemetry(app)
 
 cors_origins = [
     origin.strip()
@@ -284,6 +288,12 @@ def record_operator_action(incident_id: int, request: OperatorActionRequest):
         ),
     })
     return {"recorded": True, "action": action}
+
+@app.get("/telemetry/status")
+def telemetry_status_endpoint():
+    """Report whether optional OpenTelemetry instrumentation is enabled."""
+    return get_telemetry_status(telemetry_runtime)
+
 
 @app.get("/health")
 def health():
