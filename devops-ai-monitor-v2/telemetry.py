@@ -36,11 +36,16 @@ class TelemetryRuntime:
 
         now = time.monotonic()
         with self._container_lock:
+            stale_ids = [
+                container_id
+                for container_id, snapshot in self._container_observations.items()
+                if now - snapshot["observed_at"] > self._stale_after_seconds
+            ]
+            for container_id in stale_ids:
+                self._container_observations.pop(container_id, None)
             snapshots = list(self._container_observations.items())
         observations = []
         for container_id, snapshot in snapshots:
-            if now - snapshot["observed_at"] > self._stale_after_seconds:
-                continue
             value = snapshot.get(field)
             if value is None:
                 continue
