@@ -98,7 +98,7 @@ def _sanitize_client_request(span, request):
     """Remove query values from outbound HTTP span URLs."""
     if not span or not span.is_recording():
         return
-    safe_url = request.url.copy_with(query=None, fragment=None)
+    safe_url = request.url.copy_with(username=None, password=None, query=None, fragment=None)
     span.set_attribute("url.full", str(safe_url))
     span.set_attribute("url.query", "[REDACTED]" if request.url.query else "")
 
