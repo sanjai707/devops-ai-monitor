@@ -31,7 +31,7 @@ curl.exe http://127.0.0.1:3000
 
 ## Independent audit status
 
-- The pre-telemetry audit passed 23 backend tests using isolated SQLite databases. Three telemetry configuration tests were added in this branch but have not yet been executed.
+- The pre-branch audit passed 23 backend tests using isolated SQLite databases. This branch adds five tests (two incident/queue tests and three telemetry configuration tests), for 28 total discovered tests; the updated suite has not yet been executed.
 - TypeScript typecheck and frontend production build passed.
 - Local and production Compose files parsed successfully.
 - Host live API returned `api: ok`; Docker and Ollama were unavailable because
