@@ -80,7 +80,7 @@ services:
       resources:
         limits:
           cpus: "0.50"
-          memory: 384M
+          memory: 256M
 
   prometheus:
     image: prom/prometheus:v3.16.0
@@ -101,7 +101,7 @@ services:
       resources:
         limits:
           cpus: "0.50"
-          memory: 512M
+          memory: 384M
 
   grafana:
     image: grafana/grafana:13.3.1
