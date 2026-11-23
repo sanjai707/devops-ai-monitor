@@ -257,6 +257,8 @@ class QualityAuditTests(unittest.TestCase):
         self.assertIn("evidence_reference_accuracy", report)
         self.assertIn("unsupported_claim_rate", report)
         self.assertIn("confidence_calibration", report)
+        self.assertIsNone(report["root_cause_accuracy"])
+        self.assertEqual(report["root_cause_scored_cases"], 0)
 
     def test_feedback_review_and_correction_remain_pending(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -301,3 +303,53 @@ class QualityAuditTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+    def test_automatic_recovery_resolves_all_active_states_and_is_audited(self):
+        with tempfile.TemporaryDirectory() as directory:
+            db = IncidentDatabase(str(Path(directory) / "automatic-recovery.db"))
+            for status in ("open", "acknowledged", "investigating", "reopened"):
+                incident = db.create({
+                    **incident_record(f"recover-{status}"),
+                    "status": status,
+                })
+                # create() stores the requested initial status; exercise recovery for each.
+                resolved_count = db.resolve_by_fingerprint(
+                    f"recover-{status}", "2026-11-23T12:10:00Z"
+                )
+                self.assertEqual(resolved_count, 1)
+                resolved = db.get(incident["id"])
+                self.assertEqual(resolved["status"], "resolved")
+                audit = db.list_incident_audit(incident["id"])
+                self.assertTrue(any(
+                    item["action"] == "automatically_resolved"
+                    and item["actor"] == "monitor"
+                    for item in audit
+                ))
+
+    def test_investigation_claim_is_single_winner(self):
+        with tempfile.TemporaryDirectory() as directory:
+            db = IncidentDatabase(str(Path(directory) / "claim.db"))
+            incident = db.create(incident_record("claim-once"))
+            investigation, created = db.create_investigation(incident["id"])
+            self.assertTrue(created)
+            barrier = threading.Barrier(8)
+            claims = []
+            errors = []
+
+            def claim():
+                try:
+                    barrier.wait()
+                    claims.append(db.claim_investigation(2))
+                except Exception as exc:
+                    errors.append(exc)
+
+            threads = [threading.Thread(target=claim) for _ in range(8)]
+            for thread in threads:
+                thread.start()
+            for thread in threads:
+                thread.join()
+            self.assertEqual(errors, [])
+            winners = [item for item in claims if item is not None]
+            self.assertEqual(len(winners), 1)
+            self.assertEqual(winners[0]["id"], investigation["id"])
+            self.assertEqual(winners[0]["status"], "processing")
