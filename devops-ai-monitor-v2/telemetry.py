@@ -188,7 +188,6 @@ def configure_telemetry(app):
     meter.create_observable_gauge(
         "devops_ai_monitor.container.restart_count",
         callbacks=[lambda options: runtime.container_observations("restart_count")],
-        unit="1",
         description="Latest Docker container restart count",
     )
 
