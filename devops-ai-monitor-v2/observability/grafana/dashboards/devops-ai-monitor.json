@@ -243,7 +243,7 @@
       },
       "targets": [
         {
-          "expr": "sum(devops_ai_monitor_container_running)",
+          "expr": "sum(devops_ai_monitor_container_running_ratio)",
           "legendFormat": "running containers",
           "refId": "A"
         }
