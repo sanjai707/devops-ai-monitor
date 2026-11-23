@@ -60,7 +60,7 @@ npm.cmd --prefix frontend run build
 docker compose config --quiet
 ```
 
-The independent audit suite currently contains 23 backend tests covering
+The backend test suite includes 26 tests covering
 database concurrency/migrations/retention/backup, incident and knowledge
 lifecycle, feedback, evidence validation, prompt-injection boundaries,
 authentication, remediation and expanded deterministic evaluation cases.
@@ -88,6 +88,40 @@ $result.analysis
 ```
 
 Swagger UI: http://127.0.0.1:8000/docs
+
+## Optional OpenTelemetry observability
+
+The free, self-hosted telemetry profile adds FastAPI request metrics and traces,
+outbound HTTPX traces (including Ollama calls), an OTLP Collector, Prometheus and
+a provisioned Grafana API dashboard. It is disabled during normal Compose
+startup. Prometheus keeps 7 days of metrics; traces are currently debug-exported
+to Collector logs and are not persisted to a trace database. Application OTLP
+logs are not enabled yet.
+
+Create a local environment file and replace the Grafana password:
+
+```powershell
+Copy-Item .env.example .env
+notepad .env
+```
+
+Set `OTEL_ENABLED=true` and a new `GRAFANA_ADMIN_PASSWORD`, then run:
+
+```powershell
+docker compose --profile telemetry up --build -d
+Invoke-RestMethod http://127.0.0.1:8000/telemetry/status
+```
+
+Open Grafana at http://127.0.0.1:3001, Prometheus at
+http://127.0.0.1:9090, and use http://127.0.0.1:4318 as the OTLP/HTTP receiver
+for host applications. Containers on the Compose network should export to
+`http://otel-collector:4318`. The Collector ports and dashboards are bound to
+localhost; do not expose them to untrusted networks.
+
+The profile adds local CPU, memory and disk use, but no hosted telemetry account
+or paid service. Use `docker compose --profile telemetry stop grafana prometheus
+otel-collector` to stop the optional services without deleting their data.
+
 
 ## Monitoring and incidents
 
