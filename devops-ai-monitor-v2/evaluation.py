@@ -126,7 +126,11 @@ def run_evaluation(investigator, run_name="baseline", prompt_version="evidence-g
             for item in results
             for finding in item.get("output", {}).get("findings", [])
         ) else 0.0,
-        "root_cause_accuracy": round(passed / len(results), 4) if results else 0.0,
+        # The current dataset has no independently adjudicated root-cause labels.
+        # Do not present validator pass rate as root-cause accuracy.
+        "root_cause_accuracy": None,
+        "root_cause_scored_cases": 0,
+        "root_cause_accuracy_status": "not_measured_no_adjudicated_labels",
         "confidence_calibration": {
             "high": sum(
                 1 for item in results
