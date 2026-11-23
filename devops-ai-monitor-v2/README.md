@@ -60,7 +60,7 @@ npm.cmd --prefix frontend run build
 docker compose config --quiet
 ```
 
-The backend test suite includes 26 tests covering
+The backend test suite includes 28 tests covering
 database concurrency/migrations/retention/backup, incident and knowledge
 lifecycle, feedback, evidence validation, prompt-injection boundaries,
 authentication, remediation and expanded deterministic evaluation cases.
