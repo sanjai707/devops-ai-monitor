@@ -55,3 +55,44 @@ bounded writes and coordinated backups. PostgreSQL migration requirements:
 - Add replication, PITR, monitoring and backup retention.
 - Re-run incident/knowledge/evaluation data migration and integrity validation
   against a copy before cutover.
+
+## Optional OpenTelemetry pipeline (local-only)
+
+The telemetry profile is opt-in. Normal Compose startup does not start the
+Collector, Prometheus or Grafana.
+
+1. Copy `.env.example` to `.env` if needed.
+2. Set `OTEL_ENABLED=true` and change `GRAFANA_ADMIN_PASSWORD`.
+3. Start the core stack and telemetry profile:
+
+```powershell
+docker compose --profile telemetry up --build -d
+docker compose --profile telemetry ps
+```
+
+Local interfaces:
+
+- Grafana: http://127.0.0.1:3001
+- Prometheus: http://127.0.0.1:9090
+- OTLP/HTTP receiver: http://127.0.0.1:4318
+- OTLP/gRPC receiver: 127.0.0.1:4317
+- API telemetry status: http://127.0.0.1:8000/telemetry/status
+
+The FastAPI service exports HTTP request metrics and traces. Outbound HTTPX
+requests, including Ollama API calls, are traced. Prometheus retains metrics for
+7 days in the `prometheus-data` volume. Grafana is provisioned with a dashboard
+for request rate, p95 latency and HTTP 5xx rate.
+
+Host applications can export OTLP to localhost:4318 (HTTP) or localhost:4317
+(gRPC). Containers on this Compose network should use
+`http://otel-collector:4318`.
+
+This first phase persists metrics in Prometheus. Traces are debug-exported to
+Collector logs and are not yet retained in a trace database. OTLP application
+logs are not enabled in this phase.
+
+Stop the optional telemetry services without deleting their data:
+
+```powershell
+docker compose --profile telemetry stop grafana prometheus otel-collector
+```
