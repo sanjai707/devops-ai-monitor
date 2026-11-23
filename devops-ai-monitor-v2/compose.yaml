@@ -127,3 +127,5 @@ services:
 
 volumes:
   monitor-data:
+  prometheus-data:
+  grafana-data:
