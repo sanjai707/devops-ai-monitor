@@ -78,6 +78,7 @@ test('dashboard incident actions and approved evidence follow-up use the browser
     created_at: '2026-11-26T10:00:00Z',
     updated_at: '2026-11-26T10:01:00Z',
   }
+  let currentInvestigation: Record<string, unknown> = investigation
 
   await page.route('**/api/**', async (route) => {
     const request = route.request()
@@ -115,7 +116,7 @@ test('dashboard incident actions and approved evidence follow-up use the browser
       incident = { ...incident, status: 'acknowledged', acknowledged_at: '2026-11-26T10:02:00Z' }
       return json(incident)
     }
-    if (path === '/incidents/1/investigation') return json(investigation)
+    if (path === '/incidents/1/investigation') return json(currentInvestigation)
     if (path === '/incidents/1/investigation-followups' && method === 'GET') return json(followups)
     if (path === '/incidents/1/investigation-followups' && method === 'POST') {
       const approval = body as { source_investigation_id: number; followup_action_id: string }
@@ -131,18 +132,34 @@ test('dashboard incident actions and approved evidence follow-up use the browser
         approved_at: '2026-11-26T10:03:00Z',
         collected_at: '2026-11-26T10:03:01Z',
         time_window: { start: '2026-11-26T09:50:00Z', end: '2026-11-26T10:05:00Z' },
+        request: { description: 'Review Docker lifecycle events.', evidence_ids: ['INS-001'] },
         result: { item_count: 1 },
         limitations: [],
         error_details: null,
       }]
+      currentInvestigation = {
+        id: 11,
+        incident_id: 1,
+        status: 'pending',
+        summary: null,
+        root_cause: null,
+        confidence: null,
+        structured_json: null,
+        model_name: 'qwen2.5:3b',
+        investigated_at: null,
+        error_details: null,
+        attempts: 0,
+        created_at: '2026-11-26T10:03:01Z',
+        updated_at: '2026-11-26T10:03:01Z',
+      }
       return json({
         approved: true,
         followup: followups[0],
         reassessment_queued: true,
-        reassessment: { id: 11, incident_id: 1, status: 'pending' },
+        reassessment: currentInvestigation,
       })
     }
-    if (path === '/investigations') return json([investigation])
+    if (path === '/investigations') return json([currentInvestigation])
     if (path === '/investigations/status') {
       return json({ running: true, queue_depth: 0, investigations: { pending: 0, processing: 0, completed: 1, failed: 0 }, model: 'qwen2.5:3b' })
     }
@@ -163,7 +180,10 @@ test('dashboard incident actions and approved evidence follow-up use the browser
   expect(calls.some((call) => call.method === 'POST' && call.path === '/incidents/1/acknowledge')).toBeTruthy()
 
   await page.getByRole('button', { name: 'Approve collection & reassess' }).click()
-  await expect(page.getByText(/Collection collected/)).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Approved evidence follow-ups' })).toBeVisible()
+  await expect(page.getByText('Review Docker lifecycle events.')).toBeVisible()
+  await expect(page.getByText('Reassessment investigation #11')).toBeVisible()
+  await expect(page.getByText(/Investigation is pending/)).toBeVisible()
   const approval = calls.find((call) => call.method === 'POST' && call.path === '/incidents/1/investigation-followups')
   expect(approval?.body).toMatchObject({
     source_investigation_id: 10,
