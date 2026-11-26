@@ -191,12 +191,10 @@ class FollowupWorkflowTests(unittest.TestCase):
                 with patch.object(database_module, "IncidentDatabase", return_value=db):
                     with patch.dict(os.environ, {"API_KEY": ""}):
                         main_module = importlib.import_module("main")
-                with (
-                    patch.object(main_module, "incident_database", db),
-                    patch.object(main_module, "incident_investigator", FakeInvestigator()),
-                    patch.object(main_module, "docker_client", lambda: fake_client),
-                ):
-                    client = TestClient(main_module.app)
+                main_module.incident_database = db
+                main_module.incident_investigator = FakeInvestigator()
+                main_module.docker_client = lambda: fake_client
+                client = TestClient(main_module.app)
                 rejected = client.post(
                     f"/incidents/{incident['id']}/investigation-followups",
                     json={
@@ -226,14 +224,14 @@ class FollowupWorkflowTests(unittest.TestCase):
                 )
                 self.assertTrue(fake_client.closed)
 
-                    duplicate = client.post(
-                        f"/incidents/{incident['id']}/investigation-followups",
-                        json={
-                            "source_investigation_id": source["id"],
-                            "followup_action_id": "docker.container-events",
-                        },
-                    )
-                    self.assertEqual(duplicate.status_code, 409)
+                duplicate = client.post(
+                    f"/incidents/{incident['id']}/investigation-followups",
+                    json={
+                        "source_investigation_id": source["id"],
+                        "followup_action_id": "docker.container-events",
+                    },
+                )
+                self.assertEqual(duplicate.status_code, 409)
             finally:
                 sys.modules.pop("main", None)
                 if previous_main is not None:
