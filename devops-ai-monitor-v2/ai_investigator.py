@@ -317,6 +317,11 @@ class IncidentInvestigator:
         })
         for followup in followups:
             followup_time = followup.get("collected_at") or followup.get("approved_at")
+            followup_source = (
+                "docker_event"
+                if followup["action_id"] == "docker.container-events"
+                else "log"
+            )
             followup_payload = {
                 "followup_id": followup["id"],
                 "action_id": followup["action_id"],
@@ -331,7 +336,7 @@ class IncidentInvestigator:
                 "error_details": followup.get("error_details"),
             }
             followup_evidence_id = add_item(
-                "docker_followup",
+                followup_source,
                 incident["container_id"],
                 followup_time,
                 followup_payload,
@@ -342,7 +347,7 @@ class IncidentInvestigator:
             timeline.append({
                 "timestamp": followup_time,
                 "evidence_id": followup_evidence_id,
-                "source_type": "docker_followup",
+                "source_type": followup_source,
                 "description": (
                     f"Operator-approved {followup['action_id']} collection "
                     f"completed with status {followup['status']}"
@@ -686,6 +691,12 @@ class IncidentInvestigator:
             else:
                 timeline_item["relation_to_incident"] = "at"
         missing_information = []
+        for followup in followups:
+            if followup.get("status") != "collected":
+                missing_information.append(
+                    f"Operator-approved {followup.get('action_id')} follow-up collection "
+                    f"was {followup.get('status')}; no supporting output is available."
+                )
         if not events:
             missing_information.append(
                 "No persisted Docker events were available in the configured incident window."
