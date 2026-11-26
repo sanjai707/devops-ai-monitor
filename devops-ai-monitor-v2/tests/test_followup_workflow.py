@@ -119,6 +119,42 @@ class FollowupWorkflowTests(unittest.TestCase):
         self.assertNotIn("topsecret", result["lines"][0])
         self.assertIn("[REDACTED]", result["lines"][0])
 
+    def test_model_followup_actions_are_allowlisted_and_evidence_linked(self):
+        from ai_investigator import IncidentInvestigator
+
+        investigator = IncidentInvestigator.__new__(IncidentInvestigator)
+        inventory = [{
+            "id": "INS-001",
+            "source_type": "inspection",
+            "status": "collected",
+            "payload": {"status": "exited"},
+        }]
+        recommendation = {
+            "description": "Review Docker events.",
+            "reason": "Lifecycle evidence may add context.",
+            "evidence_ids": ["INS-001"],
+            "expected_impact": "Additional bounded context.",
+            "risk_level": "low",
+            "required_approval": False,
+            "verification_steps": ["Compare timestamps."],
+            "rollback_considerations": "Not applicable; read-only.",
+        }
+        report = investigator._validate_result({
+            "read_only_checks": [
+                {**recommendation, "followup_action_id": "docker.exec"},
+                {**recommendation, "followup_action_id": "docker.container-events"},
+            ],
+            "corrective_actions": [
+                {**recommendation, "followup_action_id": "docker.container-events"}
+            ],
+        }, inventory)
+        self.assertIsNone(report["read_only_checks"][0]["followup_action_id"])
+        self.assertEqual(
+            report["read_only_checks"][1]["followup_action_id"],
+            "docker.container-events",
+        )
+        self.assertIsNone(report["corrective_actions"][0]["followup_action_id"])
+
     def test_followup_window_cannot_exceed_fifteen_minutes(self):
         with self.assertRaisesRegex(ValueError, "15-minute"):
             collect_approved_read_only_followup(
@@ -238,6 +274,21 @@ class FollowupWorkflowTests(unittest.TestCase):
                     },
                 )
                 self.assertEqual(rejected.status_code, 409)
+
+                invalid_report = dict(report)
+                invalid_report["read_only_checks"] = [
+                    {**report["read_only_checks"][0], "evidence_ids": ["NOT-COLLECTED"]}
+                ]
+                db.complete_investigation(source["id"], invalid_report, "qwen2.5:3b")
+                invalid_evidence = client.post(
+                    f"/incidents/{incident['id']}/investigation-followups",
+                    json={
+                        "source_investigation_id": source["id"],
+                        "followup_action_id": "docker.container-events",
+                    },
+                )
+                self.assertEqual(invalid_evidence.status_code, 409)
+                db.complete_investigation(source["id"], report, "qwen2.5:3b")
 
                 response = client.post(
                     f"/incidents/{incident['id']}/investigation-followups",
