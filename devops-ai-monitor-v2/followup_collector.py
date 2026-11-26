@@ -29,12 +29,14 @@ def _normalize_event(event):
     actor = event.get("Actor") or {}
     attributes = actor.get("Attributes") or {}
     return {
-        "action": str(event.get("Action") or event.get("status") or "unknown")[:80],
+        "action": redact_log_secrets(
+            str(event.get("Action") or event.get("status") or "unknown")[:80]
+        ),
         "timestamp": event.get("time"),
         "timestamp_nano": event.get("timeNano"),
         "container_id": str(actor.get("ID") or "")[:128],
         "attributes": {
-            key: str(value)[:256]
+            key: redact_log_secrets(str(value)[:256])
             for key, value in attributes.items()
             if key in ATTRIBUTE_ALLOWLIST and value is not None
         },
