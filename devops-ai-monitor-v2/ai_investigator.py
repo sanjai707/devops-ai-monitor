@@ -691,15 +691,27 @@ class IncidentInvestigator:
             else:
                 timeline_item["relation_to_incident"] = "at"
         missing_information = []
+        followup_events_available = any(
+            item.get("action_id") == "docker.container-events"
+            and item.get("status") == "collected"
+            and (item.get("result") or {}).get("item_count", 0) > 0
+            for item in followups
+        )
+        followup_logs_available = any(
+            item.get("action_id") == "docker.container-logs"
+            and item.get("status") == "collected"
+            and (item.get("result") or {}).get("item_count", 0) > 0
+            for item in followups
+        )
         for followup in followups:
             if followup.get("status") != "collected":
                 missing_information.append(
                     f"Operator-approved {followup.get('action_id')} follow-up collection "
                     f"was {followup.get('status')}; no supporting output is available."
                 )
-        if not events:
+        if not events and not followup_events_available:
             missing_information.append(
-                "No persisted Docker events were available in the configured incident window."
+                "No persisted Docker events or approved follow-up events were available in the configured incident window."
             )
         if not metric_samples:
             missing_information.append(
@@ -709,7 +721,10 @@ class IncidentInvestigator:
             missing_information.append(
                 "Container inspection was unavailable; the container may have been removed or Docker may be disconnected."
             )
-        if any("logs unavailable" in error.lower() for error in collection_errors):
+        if (
+            any("logs unavailable" in error.lower() for error in collection_errors)
+            and not followup_logs_available
+        ):
             missing_information.append("Container logs could not be collected.")
         if (
             inspection
