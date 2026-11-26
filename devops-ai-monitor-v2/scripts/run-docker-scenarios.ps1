@@ -74,7 +74,7 @@ Start-TestContainer -Scenario "high-memory" -ExtraArgs @(
     "--memory", "128m"
 ) -Command @(
     "sh", "-c",
-    'awk ''BEGIN { for (i = 0; i < 116; i++) data[i] = sprintf("%0100000d", 0); system("sleep 600") }'''
+    'awk ''BEGIN { for (i = 0; i < 116; i++) data[i] = sprintf("%01000000d", 0); system("sleep 600") }'''
 )
 
 Write-Host ""
