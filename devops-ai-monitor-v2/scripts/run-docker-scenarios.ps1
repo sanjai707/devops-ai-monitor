@@ -51,6 +51,8 @@ function Start-TestContainer {
 Write-Host "Creating isolated, labelled failure scenarios. No existing containers are changed."
 
 Start-TestContainer -Scenario "stopped" -ExtraArgs @() -Command @("sh", "-c", "sleep 600")
+# Let the monitor observe the running state before the controlled stop.
+Start-Sleep -Seconds 12
 docker stop "$Prefix-stopped" | Out-Null
 if ($LASTEXITCODE -ne 0) { throw "Unable to stop stopped-scenario container." }
 
