@@ -176,7 +176,8 @@ test('dashboard incident actions and approved evidence follow-up use the browser
   await expect(page.getByRole('heading', { name: 'Incident center', exact: true }).first()).toBeVisible()
 
   await page.getByRole('button', { name: 'Ack' }).click()
-  await expect(page.getByText('Acknowledged', { exact: true }).first()).toBeVisible()
+  const incidentRow = page.getByRole('row').filter({ hasText: 'Browser test container stopped' })
+  await expect(incidentRow.getByText('Acknowledged', { exact: true })).toBeVisible()
   expect(calls.some((call) => call.method === 'POST' && call.path === '/incidents/1/acknowledge')).toBeTruthy()
 
   await page.getByRole('button', { name: 'Approve collection & reassess' }).click()
