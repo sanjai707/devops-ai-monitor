@@ -187,6 +187,8 @@ class FollowupWorkflowTests(unittest.TestCase):
                     return db.create_investigation(incident_id, force=force)
 
             previous_main = sys.modules.pop("main", None)
+            previous_api_key = os.environ.get("API_KEY")
+            os.environ["API_KEY"] = ""
             try:
                 with patch.object(database_module, "IncidentDatabase", return_value=db):
                     with patch.dict(os.environ, {"API_KEY": ""}):
@@ -236,6 +238,10 @@ class FollowupWorkflowTests(unittest.TestCase):
                 sys.modules.pop("main", None)
                 if previous_main is not None:
                     sys.modules["main"] = previous_main
+                if previous_api_key is None:
+                    os.environ.pop("API_KEY", None)
+                else:
+                    os.environ["API_KEY"] = previous_api_key
 
 
 if __name__ == "__main__":
