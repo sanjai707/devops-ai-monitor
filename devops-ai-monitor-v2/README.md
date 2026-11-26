@@ -14,7 +14,8 @@ Read-only Docker monitoring with local Ollama analysis.
 - The investigation panel shows evidence references, timeline, collection limitations, confidence rationale, and risk-rated advisory actions.
 - `GET /containers/{container_id}/diagnostics` returns container state, exit code, OOM status, restart count, health status, restart policy, and timestamps.
 - `GET /containers/{container_id}/metrics` returns a read-only CPU, memory and cumulative network snapshot for running containers.
-- `POST /analyze` now sends both Docker metadata and recent logs to Qwen.
+- `POST /analyze` sends a bounded Docker metadata snapshot and recent stdout/stderr logs to Qwen after applying the same pattern-based secret redaction used by incident investigations.
+- Direct analysis includes at most 300 log lines / 20 KB. Its response returns a `model_input_summary` describing diagnostic fields, included log counts/bytes, redaction and truncation status, and confirms that container environment variables were not collected. Raw logs are not echoed in the response.
 - The analysis prompt distinguishes evidence from hypotheses and avoids claiming the initiator of a SIGTERM without evidence.
 
 ## Prerequisites
@@ -257,5 +258,5 @@ docker compose ps
 - API binds to `127.0.0.1:8000`.
 - Dashboard binds to `127.0.0.1:3000`.
 - Docker socket access is powerful. This app currently implements read-only operations; do not expose it publicly.
-- Logs may contain secrets or personal data. Review/redact sensitive logs before sending them to a model.
+- Secret redaction is pattern-based rather than exhaustive. Review sensitive data handling before relying on any model output; unknown secret formats or personal data may not be detected.
 - Treat AI output as a hypothesis, not an authoritative incident finding. Require human approval for remediation.
