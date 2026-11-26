@@ -359,3 +359,7 @@ class QualityAuditTests(unittest.TestCase):
             self.assertEqual(len(winners), 1)
             self.assertEqual(winners[0]["id"], investigation["id"])
             self.assertEqual(winners[0]["status"], "processing")
+
+
+if __name__ == "__main__":
+    unittest.main()
