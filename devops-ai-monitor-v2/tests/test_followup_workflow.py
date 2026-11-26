@@ -248,6 +248,91 @@ class FollowupWorkflowTests(unittest.TestCase):
             self.assertEqual(version, 8)
             self.assertEqual(migrated.investigation_followups_for_incident(1), [])
 
+    def test_direct_analyze_redacts_logs_and_diagnostics_before_ollama(self):
+        class AnalyzeFakeContainer(FakeContainer):
+            short_id = "container-short"
+            attrs = {
+                "State": {
+                    "Status": "exited",
+                    "Running": False,
+                    "Paused": False,
+                    "Restarting": False,
+                    "Health": None,
+                    "ExitCode": 143,
+                    "OOMKilled": False,
+                    "Error": "password=diagnostic-secret",
+                    "StartedAt": "2026-11-26T09:55:00Z",
+                    "FinishedAt": "2026-11-26T10:00:00Z",
+                },
+                "HostConfig": {"RestartPolicy": {"Name": "unless-stopped"}},
+                "Config": {"Image": "busybox:latest"},
+                "RestartCount": 2,
+            }
+
+        sent_payloads = []
+        fake_client = FakeClient(AnalyzeFakeContainer())
+
+        class FakeOllamaResponse:
+            def raise_for_status(self):
+                return None
+
+            def json(self):
+                return {"response": "The container stopped; cause remains unconfirmed."}
+
+        class FakeOllamaHTTPClient:
+            def __init__(self, *args, **kwargs):
+                pass
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *args):
+                return False
+
+            def post(self, url, json, **kwargs):
+                sent_payloads.append(json)
+                return FakeOllamaResponse()
+
+        previous_main = sys.modules.pop("main", None)
+        previous_api_key = os.environ.get("API_KEY")
+        os.environ["API_KEY"] = ""
+        try:
+            with patch.object(database_module, "IncidentDatabase", return_value=IncidentDatabase(":memory:")):
+                with patch.dict(os.environ, {"API_KEY": ""}):
+                    main_module = importlib.import_module("main")
+            main_module.docker_client = lambda: fake_client
+            client = TestClient(main_module.app)
+            with patch.object(main_module.httpx, "Client", FakeOllamaHTTPClient):
+                response = client.post(
+                    "/analyze",
+                    json={"container_id": "container-full-id", "tail": 1000},
+                )
+            self.assertEqual(response.status_code, 200, response.text)
+            self.assertTrue(fake_client.closed)
+            self.assertEqual(fake_client.container.log_args["tail"], 300)
+            self.assertEqual(len(sent_payloads), 1)
+            prompt = sent_payloads[0]["prompt"]
+            self.assertNotIn("topsecret", prompt)
+            self.assertNotIn("diagnostic-secret", prompt)
+            self.assertIn("[REDACTED]", prompt)
+            body = response.json()
+            self.assertNotIn("topsecret", response.text)
+            self.assertEqual(body["analysis"], "The container stopped; cause remains unconfirmed.")
+            self.assertEqual(body["diagnostics"]["error"], "password=[REDACTED]")
+            self.assertTrue(body["model_input_summary"]["logs_redacted"])
+            self.assertTrue(body["model_input_summary"]["diagnostics_redacted"])
+            self.assertEqual(body["model_input_summary"]["log_line_limit"], 300)
+            self.assertFalse(body["model_input_summary"]["container_environment_collected"])
+            self.assertIn("error", body["model_input_summary"]["diagnostic_fields_included"])
+        finally:
+            sys.modules.pop("main", None)
+            if previous_main is not None:
+                sys.modules["main"] = previous_main
+            if previous_api_key is None:
+                os.environ.pop("API_KEY", None)
+            else:
+                os.environ["API_KEY"] = previous_api_key
+
     def test_api_requires_investigation_recommendation_and_records_approval(self):
         with tempfile.TemporaryDirectory() as directory:
             db = IncidentDatabase(str(Path(directory) / "api-followup.db"))
