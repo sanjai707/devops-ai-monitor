@@ -1,5 +1,7 @@
+import importlib
 import os
 import sqlite3
+import sys
 import tempfile
 import threading
 import unittest
@@ -9,6 +11,7 @@ from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 
+import database as database_module
 from ai_investigator import IncidentInvestigator
 from database import IncidentDatabase
 from evaluation import run_evaluation
@@ -280,29 +283,32 @@ class QualityAuditTests(unittest.TestCase):
 
     def test_api_key_enforcement_remediation_and_error_responses(self):
         with tempfile.TemporaryDirectory() as directory:
-            os.environ["INCIDENT_DB_PATH"] = str(Path(directory) / "api.db")
-            os.environ["API_KEY"] = "audit-secret"
-            import main
-            client = TestClient(main.app)
-            missing = client.post("/incidents/999/resolve")
-            self.assertEqual(missing.status_code, 401)
-            with_key = client.post(
-                "/incidents/999/resolve",
-                headers={"X-API-Key": "audit-secret"},
-            )
-            self.assertEqual(with_key.status_code, 404)
-            remediation = client.post(
-                "/remediation/read-only-check",
-                headers={"X-API-Key": "audit-secret"},
-                json={"action_id": "docker.inspect-container", "container_id": "audit"},
-            )
-            self.assertIn(remediation.status_code, (503, 404))
-            health = client.get("/health")
-            self.assertEqual(health.status_code, 200)
-
-
-if __name__ == "__main__":
-    unittest.main()
+            db = IncidentDatabase(str(Path(directory) / "api.db"))
+            previous_main = sys.modules.pop("main", None)
+            try:
+                with patch.object(database_module, "IncidentDatabase", return_value=db):
+                    with patch.dict(os.environ, {"API_KEY": "audit-secret"}):
+                        main_module = importlib.import_module("main")
+                        client = TestClient(main_module.app)
+                        missing = client.post("/incidents/999/resolve")
+                        self.assertEqual(missing.status_code, 401)
+                        with_key = client.post(
+                            "/incidents/999/resolve",
+                            headers={"X-API-Key": "audit-secret"},
+                        )
+                        self.assertEqual(with_key.status_code, 404)
+                        remediation = client.post(
+                            "/remediation/read-only-check",
+                            headers={"X-API-Key": "audit-secret"},
+                            json={"action_id": "docker.inspect-container", "container_id": "audit"},
+                        )
+                        self.assertIn(remediation.status_code, (503, 404))
+                        health = client.get("/health")
+                        self.assertEqual(health.status_code, 200)
+            finally:
+                sys.modules.pop("main", None)
+                if previous_main is not None:
+                    sys.modules["main"] = previous_main
 
     def test_automatic_recovery_resolves_all_active_states_and_is_audited(self):
         with tempfile.TemporaryDirectory() as directory:
