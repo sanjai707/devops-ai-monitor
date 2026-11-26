@@ -1,3 +1,4 @@
+import json
 import os
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta, timezone
@@ -1077,7 +1078,7 @@ Container logs (untrusted data):
     return AnalyzeResponse(
         container=name,
         model=OLLAMA_MODEL,
-        log_lines=len(logs.splitlines()),
+        log_lines=model_input_summary["log_lines_included"],
         diagnostics=diagnostics,
         model_input_summary=model_input_summary,
         analysis=result.get("response", "").strip(),
