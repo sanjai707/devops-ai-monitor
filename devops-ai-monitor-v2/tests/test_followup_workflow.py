@@ -1,5 +1,6 @@
 import importlib
 import os
+import sqlite3
 import sys
 import tempfile
 import unittest
@@ -158,6 +159,32 @@ class FollowupWorkflowTests(unittest.TestCase):
             stored = db.investigation_followups_for_incident(incident["id"])
             self.assertEqual(stored[0]["reassessment_investigation_id"], reassessment["id"])
 
+
+    def test_followup_request_column_migrates_from_schema_seven(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = str(Path(directory) / "schema-seven.db")
+            IncidentDatabase(path)
+            connection = sqlite3.connect(path)
+            connection.execute(
+                "ALTER TABLE investigation_followups DROP COLUMN request_json"
+            )
+            connection.execute("PRAGMA user_version = 7")
+            connection.commit()
+            connection.close()
+
+            migrated = IncidentDatabase(path)
+            connection = sqlite3.connect(path)
+            columns = {
+                row[1] for row in connection.execute(
+                    "PRAGMA table_info(investigation_followups)"
+                ).fetchall()
+            }
+            version = connection.execute("PRAGMA user_version").fetchone()[0]
+            connection.close()
+            self.assertIn("request_json", columns)
+            self.assertEqual(version, 8)
+            self.assertEqual(migrated.investigation_followups_for_incident(1), [])
+
     def test_api_requires_investigation_recommendation_and_records_approval(self):
         with tempfile.TemporaryDirectory() as directory:
             db = IncidentDatabase(str(Path(directory) / "api-followup.db"))
@@ -179,6 +206,12 @@ class FollowupWorkflowTests(unittest.TestCase):
                     "rollback_considerations": "Not applicable; read-only.",
                 }],
             }
+            report["evidence_inventory"] = [{
+                "id": "INS-001",
+                "source_type": "inspection",
+                "status": "collected",
+                "payload": {"exit_code": 137, "oom_killed": False},
+            }]
             db.complete_investigation(source["id"], report, "qwen2.5:3b")
             fake_client = FakeClient()
 
@@ -220,6 +253,9 @@ class FollowupWorkflowTests(unittest.TestCase):
                 self.assertTrue(body["reassessment_queued"])
                 self.assertEqual(body["followup"]["status"], "collected")
                 self.assertEqual(body["followup"]["container_id"], "container-full-id")
+                self.assertEqual(
+                    body["followup"]["request"]["evidence_ids"], ["INS-001"]
+                )
                 self.assertEqual(
                     body["followup"]["reassessment_investigation_id"],
                     body["reassessment"]["id"],
