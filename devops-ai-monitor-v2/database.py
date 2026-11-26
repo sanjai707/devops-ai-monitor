@@ -117,6 +117,7 @@ class IncidentDatabase:
                     reassessment_investigation_id INTEGER REFERENCES investigations(id),
                     container_id TEXT NOT NULL,
                     action_id TEXT NOT NULL,
+                    request_json TEXT NOT NULL DEFAULT '{}',
                     status TEXT NOT NULL,
                     approved_by TEXT NOT NULL,
                     approved_at TEXT NOT NULL,
@@ -329,9 +330,19 @@ class IncidentDatabase:
                 )
                 """
             )
+            followup_columns = {
+                row[1] for row in connection.execute(
+                    "PRAGMA table_info(investigation_followups)"
+                ).fetchall()
+            }
+            if "request_json" not in followup_columns:
+                connection.execute(
+                    "ALTER TABLE investigation_followups "
+                    "ADD COLUMN request_json TEXT NOT NULL DEFAULT '{}'"
+                )
             schema_version = connection.execute("PRAGMA user_version").fetchone()[0]
-            if schema_version < 7:
-                connection.execute("PRAGMA user_version = 7")
+            if schema_version < 8:
+                connection.execute("PRAGMA user_version = 8")
 
     def _row(self, row):
         if row is None:
@@ -775,6 +786,7 @@ class IncidentDatabase:
             return None
         item = dict(row)
         item["time_window"] = json.loads(item.pop("time_window_json") or "{}")
+        item["request"] = json.loads(item.pop("request_json") or "{}")
         item["result"] = json.loads(item.pop("result_json") or "null")
         item["limitations"] = json.loads(item.pop("limitations_json") or "[]")
         return item
@@ -787,13 +799,14 @@ class IncidentDatabase:
                 """
                 INSERT INTO investigation_followups
                 (incident_id, source_investigation_id, container_id, action_id,
-                 status, approved_by, approved_at, time_window_json,
+                 request_json, status, approved_by, approved_at, time_window_json,
                  limitations_json, created_at)
-                VALUES (?, ?, ?, ?, 'collecting', ?, ?, ?, '[]', ?)
+                VALUES (?, ?, ?, ?, ?, 'collecting', ?, ?, ?, '[]', ?)
                 """,
                 (
                     record["incident_id"], record["source_investigation_id"],
                     record["container_id"], record["action_id"],
+                    json.dumps(record.get("request") or {}),
                     record["approved_by"], record["approved_at"],
                     json.dumps(record["time_window"]), now,
                 ),
