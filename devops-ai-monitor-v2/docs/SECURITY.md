@@ -7,6 +7,7 @@
 - Ollama is local and no model beyond `qwen2.5:3b` is introduced.
 - Container logs and Docker state strings are redacted for known secret patterns before AI prompts.
 - Environment variable values are not included in investigation evidence.
+- The direct `/analyze` path redacts known secret patterns from both Docker diagnostics and logs before constructing the Ollama prompt, caps the input at 300 lines / 20 KB, and returns a summary of the categories and limits sent without returning raw logs.
 - Investigation remediation is advisory and never executed by the dashboard.
 - Optional `API_KEY` middleware can require `X-API-Key` for mutations and knowledge endpoints.
 - CORS origins are restricted by `CORS_ALLOWED_ORIGINS`.
@@ -47,7 +48,7 @@ VERIFIED LIMITATIONS:
 - Approved knowledge is untrusted supporting context and cannot execute
   remediation; prompt-injection fixtures are covered, but real-model resistance
   is not proven.
-- Secret redaction is pattern-based and can miss unknown secret formats.
+- Secret redaction is pattern-based and can miss unknown secret formats. The `/analyze` input summary reports that redaction was applied; it is not a guarantee that every sensitive value was detected.
 - Audit history records application actions but does not establish real-user
   identity or approval signatures.
 
