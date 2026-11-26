@@ -667,6 +667,20 @@ def approve_investigation_followup(
             status_code=409,
             detail="This investigation did not request that supported evidence collection",
         )
+    source_inventory = {
+        item.get("id")
+        for item in result.get("evidence_inventory", [])
+        if item.get("status") == "collected" and item.get("id")
+    }
+    requested_evidence_ids = recommendation.get("evidence_ids") or []
+    if (
+        not requested_evidence_ids
+        or any(reference not in source_inventory for reference in requested_evidence_ids)
+    ):
+        raise HTTPException(
+            status_code=409,
+            detail="The follow-up recommendation references missing or uncollected evidence",
+        )
 
     existing = incident_database.investigation_followups_for_incident(incident_id)
     if any(
@@ -720,6 +734,15 @@ def approve_investigation_followup(
             "source_investigation_id": source["id"],
             "container_id": incident["container_id"],
             "action_id": request.followup_action_id,
+            "request": {
+                "description": recommendation["description"],
+                "reason": recommendation["reason"],
+                "evidence_ids": requested_evidence_ids,
+                "expected_impact": recommendation["expected_impact"],
+                "risk_level": recommendation["risk_level"],
+                "verification_steps": recommendation["verification_steps"],
+                "time_window": window,
+            },
             "approved_by": actor,
             "approved_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
             "time_window": window,
