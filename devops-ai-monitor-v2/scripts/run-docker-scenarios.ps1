@@ -71,11 +71,10 @@ Start-TestContainer -Scenario "high-cpu" -ExtraArgs @("--cpus", "1.0") -Command 
 )
 
 Start-TestContainer -Scenario "high-memory" -ExtraArgs @(
-    "--memory", "128m",
-    "--tmpfs", "/run/test-memory:rw,size=120m"
+    "--memory", "128m"
 ) -Command @(
     "sh", "-c",
-    "dd if=/dev/zero of=/run/test-memory/fill bs=1M count=112 2>/dev/null; sleep 600"
+    "awk 'BEGIN { for (i = 0; i < 116; i++) data[i] = sprintf(\"%0100000d\", 0); system(\"sleep 600\") }'"
 )
 
 Write-Host ""
