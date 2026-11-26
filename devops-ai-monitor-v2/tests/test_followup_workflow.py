@@ -12,6 +12,7 @@ from fastapi.testclient import TestClient
 import database as database_module
 from database import IncidentDatabase
 from followup_collector import collect_approved_read_only_followup
+from evaluation import run_live_model_evaluation
 
 
 class FakeContainer:
@@ -154,6 +155,32 @@ class FollowupWorkflowTests(unittest.TestCase):
             "docker.container-events",
         )
         self.assertIsNone(report["corrective_actions"][0]["followup_action_id"])
+
+    def test_live_model_evaluation_reports_outputs_without_claiming_accuracy(self):
+        class FakeInvestigator:
+            model_name = "test-model"
+
+            def _request_investigation(self, evidence):
+                return {
+                    "summary": "Fixture was reviewed by the test model.",
+                    "root_cause": "Insufficient evidence to determine the root cause.",
+                    "confidence": "low",
+                    "findings": [],
+                    "missing_information": ["More evidence is needed."],
+                    "read_only_checks": [],
+                    "evidence_inventory": evidence["evidence_inventory"],
+                }
+
+        report = run_live_model_evaluation(FakeInvestigator(), max_cases=1)
+        self.assertEqual(report["evaluation_mode"], "real_model_inference_human_review")
+        self.assertEqual(report["model_name"], "test-model")
+        self.assertEqual(report["completed_cases"], 1)
+        self.assertEqual(report["failed_cases"], 0)
+        self.assertIsNone(report["root_cause_accuracy"])
+        self.assertEqual(
+            report["root_cause_accuracy_status"],
+            "not_scored_no_independently_adjudicated_labels",
+        )
 
     def test_followup_window_cannot_exceed_fifteen_minutes(self):
         with self.assertRaisesRegex(ValueError, "15-minute"):
