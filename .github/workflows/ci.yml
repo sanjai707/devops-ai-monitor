@@ -72,7 +72,7 @@ jobs:
         run: npm install --no-save @playwright/test
 
       - name: Install Chromium
-        run: npx playwright install --with-deps chromium
+        run: npx playwright install chromium
 
       - name: Type-check frontend
         run: npm run typecheck
@@ -91,7 +91,7 @@ jobs:
         with:
           name: playwright-diagnostics
           path: |
-            devops-ai-monitor-v2/frontend/playwright-report
-            devops-ai-monitor-v2/frontend/test-results
+            playwright-report
+            test-results
           if-no-files-found: ignore
           retention-days: 7
