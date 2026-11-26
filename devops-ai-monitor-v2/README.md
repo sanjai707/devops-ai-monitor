@@ -205,9 +205,10 @@ from the project root:
 ```
 
 This creates a stopped container, a bounded restart loop, an unhealthy
-container, a CPU-load container and a memory-backed load container. It reports
-their states and matching incidents from the local API. The CPU and memory
-scenarios consume temporary host resources; the memory container is capped.
+container, a CPU-load container and an anonymous-memory allocation container.
+It reports their states and matching incidents from the local API. The CPU and
+memory scenarios consume temporary host resources; the memory container is
+capped at 128 MiB.
 Cleanup is restricted to containers carrying the test harness label:
 
 ```powershell
