@@ -1312,6 +1312,13 @@ class IncidentDatabase:
             ).fetchone()
             return self._investigation_row(row), True
 
+    def get_investigation(self, investigation_id):
+        with self.lock, self.connect() as connection:
+            row = connection.execute(
+                "SELECT * FROM investigations WHERE id = ?", (investigation_id,)
+            ).fetchone()
+            return self._investigation_row(row)
+
     def investigation_for_incident(self, incident_id):
         with self.lock, self.connect() as connection:
             row = connection.execute(
