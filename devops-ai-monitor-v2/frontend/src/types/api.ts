@@ -133,8 +133,28 @@ export type InvestigationEvidence = {
   limitations: string[]
 }
 
+export type FollowupActionId = 'docker.container-events' | 'docker.container-logs'
+
+export type InvestigationFollowup = {
+  id: number
+  incident_id: number
+  source_investigation_id: number
+  reassessment_investigation_id: number | null
+  container_id: string
+  action_id: FollowupActionId
+  status: 'collecting' | 'collected' | 'unavailable' | 'failed' | string
+  approved_by: string
+  approved_at: string
+  collected_at: string | null
+  time_window: Record<string, string | number>
+  result: Record<string, unknown> | null
+  limitations: string[]
+  error_details: string | null
+}
+
 export type InvestigationRecommendation = {
   description: string
+  followup_action_id?: FollowupActionId | null
   reason: string
   evidence_ids: string[]
   expected_impact: string
