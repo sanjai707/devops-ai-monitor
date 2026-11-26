@@ -251,6 +251,13 @@ class FollowupWorkflowTests(unittest.TestCase):
     def test_direct_analyze_redacts_logs_and_diagnostics_before_ollama(self):
         class AnalyzeFakeContainer(FakeContainer):
             short_id = "container-short"
+            def logs(self, **kwargs):
+                self.log_args = kwargs
+                return "".join(
+                    f"2026-11-26T10:00:{index % 60:02d}Z password=topsecret application event {index:04d} " + "x" * 80 + "\\n"
+                    for index in range(350)
+                ).encode("utf-8")
+
             attrs = {
                 "State": {
                     "Status": "exited",
@@ -322,6 +329,9 @@ class FollowupWorkflowTests(unittest.TestCase):
             self.assertTrue(body["model_input_summary"]["logs_redacted"])
             self.assertTrue(body["model_input_summary"]["diagnostics_redacted"])
             self.assertEqual(body["model_input_summary"]["log_line_limit"], 300)
+            self.assertLessEqual(body["model_input_summary"]["log_bytes_included"], 20_000)
+            self.assertLessEqual(body["model_input_summary"]["log_lines_included"], 300)
+            self.assertTrue(body["model_input_summary"]["logs_truncated"])
             self.assertFalse(body["model_input_summary"]["container_environment_collected"])
             self.assertIn("error", body["model_input_summary"]["diagnostic_fields_included"])
         finally:
