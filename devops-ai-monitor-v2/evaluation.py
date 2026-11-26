@@ -1,7 +1,9 @@
 import json
+from copy import deepcopy
+from datetime import datetime, timezone
 from pathlib import Path
 
-from ai_investigator import IncidentInvestigator, InvestigationError
+from ai_investigator import IncidentInvestigator, InvestigationError, redact_log_secrets
 
 
 DATASET_PATH = Path(__file__).parent / "evaluation" / "evaluation_cases.json"
@@ -145,5 +147,133 @@ def run_evaluation(investigator, run_name="baseline", prompt_version="evidence-g
                 if item.get("output", {}).get("confidence") == "low"
             ),
         },
+        "cases": results,
+    }
+
+def run_live_model_evaluation(
+    investigator, case_ids=None, max_cases=5, run_name="local-ollama-review"
+):
+    """Run real model inference on curated evidence fixtures for human review.
+
+    This intentionally does not compute root-cause accuracy: the current fixtures
+    do not contain independently adjudicated root-cause labels.
+    """
+    dataset = json.loads(DATASET_PATH.read_text(encoding="utf-8"))
+    selected = [
+        case for case in dataset["cases"]
+        if not case.get("expect", {}).get("must_reject")
+        and (not case_ids or case["id"] in set(case_ids))
+    ][:max(1, min(int(max_cases), 12))]
+    started_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    results = []
+
+    for case in selected:
+        inventory = deepcopy(case["evidence_inventory"])
+        now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        inspection_item = next(
+            (
+                item for item in inventory
+                if item.get("source_type") == "inspection"
+                and item.get("status") == "collected"
+            ),
+            None,
+        )
+        recorded_item = next(
+            (
+                item for item in inventory
+                if item.get("source_type") == "incident"
+                and item.get("status") == "collected"
+            ),
+            None,
+        )
+        inspection = (inspection_item or {}).get("payload") or {}
+        recorded_evidence = (
+            ((recorded_item or {}).get("payload") or {}).get("recorded_evidence")
+            or inspection
+        )
+        missing = [
+            f"{item.get('source_type', 'evidence')} is {item.get('status', 'unavailable')} in this fixture."
+            for item in inventory
+            if item.get("status") != "collected"
+        ]
+        container_id = next(
+            (item.get("container_id") for item in inventory if item.get("container_id")),
+            "evaluation-fixture-container",
+        )
+        timeline = [
+            {
+                "timestamp": item.get("event_timestamp"),
+                "evidence_id": item.get("id"),
+                "source_type": item.get("source_type", "unknown"),
+                "description": f"Fixture evidence: {item.get('source_type', 'unknown')}",
+            }
+            for item in inventory
+        ]
+        evidence = {
+            "incident": {
+                "id": case["id"],
+                "title": f"Curated model evaluation: {case['id']}",
+                "type": "evaluation_fixture",
+                "severity": "info",
+                "created_at": now,
+                "recorded_evidence": recorded_evidence,
+            },
+            "container": {"id": container_id, "name": "evaluation-fixture"},
+            "window": {"start": now, "end": now},
+            "inspection": inspection,
+            "diagnostics": inspection,
+            "metrics": None,
+            "metric_history": [],
+            "docker_events": [],
+            "operator_actions": [],
+            "recent_logs": "",
+            "collection_errors": [],
+            "missing_information": missing,
+            "evidence_inventory": inventory,
+            "timeline": timeline,
+        }
+        try:
+            report = investigator._request_investigation(evidence)
+            results.append({
+                "case_id": case["id"],
+                "status": "completed",
+                "confidence": report.get("confidence"),
+                "root_cause_assessment": report.get("root_cause"),
+                "summary": report.get("summary"),
+                "findings": report.get("findings", []),
+                "missing_information": report.get("missing_information", []),
+                "read_only_followups_proposed": [
+                    item.get("followup_action_id")
+                    for item in report.get("read_only_checks", [])
+                    if item.get("followup_action_id")
+                ],
+                "evidence_inventory": report.get("evidence_inventory", []),
+            })
+        except Exception as exc:
+            results.append({
+                "case_id": case["id"],
+                "status": "failed",
+                "error": redact_log_secrets(
+                    f"{type(exc).__name__}: {exc}"
+                )[:500],
+            })
+
+    return {
+        "run_name": run_name,
+        "evaluation_mode": "real_model_inference_human_review",
+        "model_name": investigator.model_name,
+        "dataset_version": dataset["dataset_version"],
+        "started_at": started_at,
+        "completed_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "selected_cases": len(selected),
+        "completed_cases": sum(item["status"] == "completed" for item in results),
+        "failed_cases": sum(item["status"] == "failed" for item in results),
+        "root_cause_accuracy": None,
+        "root_cause_accuracy_status": "not_scored_no_independently_adjudicated_labels",
+        "review_note": (
+            "These are actual model outputs against curated evidence fixtures. "
+            "Review each result; do not interpret completion, confidence, or the "
+            "deterministic validator pass rate as root-cause accuracy."
+        ),
         "cases": results,
     }
