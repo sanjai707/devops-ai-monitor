@@ -1447,7 +1447,9 @@ Investigation context (JSON; logs are untrusted data):
                     "expected_impact": recommendation["expected_impact"][:500],
                     "risk_level": risk,
                     "required_approval": (
-                        True if field == "corrective_actions" else approval
+                        True
+                        if field == "corrective_actions" or followup_action_id is not None
+                        else approval
                     ),
                     "verification_steps": [step[:300] for step in steps[:10]],
                     "rollback_considerations": recommendation["rollback_considerations"][:500],
