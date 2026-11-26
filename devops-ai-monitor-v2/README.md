@@ -60,10 +60,12 @@ npm.cmd --prefix frontend run build
 docker compose config --quiet
 ```
 
-The backend test suite includes 28 tests covering
-database concurrency/migrations/retention/backup, incident and knowledge
-lifecycle, feedback, evidence validation, prompt-injection boundaries,
-authentication, remediation and expanded deterministic evaluation cases.
+The backend suite covers database concurrency and migrations, incident and
+knowledge lifecycle, feedback, evidence validation, prompt-injection boundaries,
+authentication, remediation and staged investigation follow-up collection.
+Browser tests exercise the incident acknowledgement and evidence-approval
+workflow through the dashboard. CI runs backend tests, frontend type-check/build,
+browser tests, and both Compose configuration checks.
 
 ```powershell
 Invoke-RestMethod http://127.0.0.1:8000/health
@@ -102,7 +104,7 @@ logs are not enabled yet.
 Create a local environment file and replace the Grafana password:
 
 ```powershell
-Copy-Item .env.example .env
+if (!(Test-Path .env)) { Copy-Item .env.example .env }
 notepad .env
 ```
 
@@ -146,9 +148,77 @@ Invoke-RestMethod -Method Post http://127.0.0.1:8000/incidents/1/investigate
 
 To explicitly create a new investigation attempt for an incident, append `?force=true` to the POST URL. Investigation output is JSON and marks root-cause assessments as unconfirmed. Facts and recommendations without valid collected evidence references are omitted; confidence is constrained by evidence diversity, collection completeness, and contradictions. Corrective actions remain advisory and always require human approval.
 
+### Staged evidence follow-ups
+
+Investigations can request only two predefined read-only follow-ups: Docker
+lifecycle events or timestamped container logs. The model cannot submit a
+command, choose a container, or choose arbitrary timestamps. The dashboard
+shows the suggested check, its reason and supporting evidence IDs; an operator
+must explicitly approve the exact collection request.
+
+The server binds the approval to the incident's container and calculates a
+fixed incident-centered window (up to 10 minutes before and 5 minutes after,
+with a hard 15-minute maximum). Each approval stores the approved request
+snapshot, actor label, timestamps, scope, result and collection limitations.
+Event collection is capped at 100 records with a restricted attribute allowlist.
+Log collection is capped at 300 lines / 20 KB and passed through secret redaction.
+Collected or unavailable evidence is added to the next investigation attempt,
+which is queued automatically. No restart, stop, kill, shell command or other
+state-changing action is executed.
+
+List follow-up records:
+
+```powershell
+Invoke-RestMethod http://127.0.0.1:8000/incidents/1/investigation-followups
+```
+
+The dashboard exposes the approval action next to supported recommendations.
+The equivalent API is `POST /incidents/{id}/investigation-followups` with
+`source_investigation_id`, `followup_action_id` and an operator label. The
+server rejects actions not requested by that completed investigation and
+rejects evidence IDs that are missing or were not collected.
+
+### Real local Ollama evaluation
+
+The deterministic evaluation suite validates prepared outputs; it does not
+measure model accuracy. To inspect actual Qwen responses against curated
+evidence fixtures, start Ollama on the host and run:
+
+```powershell
+python scripts/evaluate_ollama.py --model qwen2.5:3b --max-cases 5 --output reports/ollama-evaluation.json
+```
+
+The report contains real model summaries, findings, confidence, missing
+information and proposed follow-ups. It deliberately does not calculate
+root-cause accuracy because the fixtures have no independently adjudicated
+ground-truth labels. Review outputs manually before using them to change prompt
+or validation behavior.
+
+### Repeatable Docker failure scenarios
+
+Start the application stack first, then run the disposable, labelled scenarios
+from the project root:
+
+```powershell
+.\\scripts\\run-docker-scenarios.ps1 -ObservationSeconds 60
+```
+
+This creates a stopped container, a bounded restart loop, an unhealthy
+container, a CPU-load container and a memory-backed load container. It reports
+their states and matching incidents from the local API. The CPU and memory
+scenarios consume temporary host resources; the memory container is capped.
+Cleanup is restricted to containers carrying the test harness label:
+
+```powershell
+.\\scripts\\cleanup-docker-scenarios.ps1
+```
+
+These scripts require the Docker Engine and the `busybox:1.36.1` image (pulled
+automatically if missing). They do not change existing unlabeled containers.
+
 The Docker event collector reconnects with bounded backoff and deduplicates replayed events. SQLite retains Docker events for 14 days (maximum 20,000) and metric samples for 7 days (maximum 100,000); these defaults are configurable with `DOCKER_EVENT_RETENTION_DAYS` and `METRIC_RETENTION_DAYS`. Investigation evidence windows default to 10 minutes before and 5 minutes after the incident. Recent stdout/stderr logs are time-bounded, size-limited, and redacted. Container environment variables are never collected. Network metrics remain cumulative byte counters; they are not reported as throughput.
 
-The additive evidence, incident audit, knowledge, feedback and evaluation tables are created automatically on startup; existing incidents and investigation history are preserved. SQLite `user_version` is advanced to 6 for the current schema. When known action intent matters, record an explicit bounded annotation through `POST /incidents/{id}/operator-actions`; a Docker stop/kill event by itself remains intent-unknown.
+The additive evidence, incident audit, knowledge, feedback and evaluation tables are created automatically on startup; existing incidents and investigation history are preserved. SQLite `user_version` is advanced to 8 for the current schema. When known action intent matters, record an explicit bounded annotation through `POST /incidents/{id}/operator-actions`; a Docker stop/kill event by itself remains intent-unknown.
 
 Example explicit test-harness context (this records a supplied annotation only; it does not stop or change a container):
 
