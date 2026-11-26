@@ -84,3 +84,14 @@ jobs:
         run: npx playwright test
         env:
           CI: "true"
+
+      - name: Upload browser test diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-diagnostics
+          path: |
+            devops-ai-monitor-v2/frontend/playwright-report
+            devops-ai-monitor-v2/frontend/test-results
+          if-no-files-found: ignore
+          retention-days: 7
