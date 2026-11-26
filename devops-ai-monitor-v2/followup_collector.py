@@ -22,7 +22,14 @@ EVENT_ALLOWLIST = {
     "start", "stop", "die", "kill", "oom", "restart",
     "health_status", "pause", "unpause",
 }
-ATTRIBUTE_ALLOWLIST = {"name", "image", "exitCode", "signal", "health"}
+EVENT_FILTERS = {
+    "start", "stop", "die", "kill", "oom", "restart",
+    "health_status: healthy", "health_status: unhealthy",
+    "pause", "unpause",
+}
+ATTRIBUTE_ALLOWLIST = {
+    "name", "image", "exitCode", "signal", "health", "health_status",
+}
 
 
 def _normalize_event(event):
@@ -63,7 +70,7 @@ def collect_approved_read_only_followup(
             decode=True,
             filters={
                 "container": [container.id],
-                "event": sorted(EVENT_ALLOWLIST),
+                "event": sorted(EVENT_FILTERS),
             },
             since=start_epoch,
             until=end_epoch,
