@@ -133,6 +133,28 @@ def redact_log_secrets(log_text):
     redacted = SECRET_PATTERNS[6].sub("[REDACTED_PRIVATE_KEY]", redacted)
     return redacted
 
+SENSITIVE_FIELD_PATTERN = re.compile(
+    r"(?i)(password|passwd|secret|token|api[_-]?key|authorization|credential|private[_-]?key)"
+)
+
+
+def redact_structured_data(value):
+    """Recursively redact secret-like fields and strings without breaking JSON."""
+    if isinstance(value, dict):
+        return {
+            key: (
+                "[REDACTED]"
+                if SENSITIVE_FIELD_PATTERN.search(str(key))
+                else redact_structured_data(item)
+            )
+            for key, item in value.items()
+        }
+    if isinstance(value, list):
+        return [redact_structured_data(item) for item in value]
+    if isinstance(value, str):
+        return redact_log_secrets(value)
+    return value
+
 
 class InvestigationError(Exception):
     def __init__(self, message, diagnostic=None):
