@@ -7,7 +7,7 @@ param(
 
 $ErrorActionPreference = "Stop"
 $Label = "devops.ai.monitor.test=true"
-$RunId = Get-Date -Format "yyyyMMddHHmmss"
+$RunId = "$(Get-Date -Format 'yyyyMMddHHmmss')-$([guid]::NewGuid().ToString('N').Substring(0, 6))"
 $Prefix = "devops-ai-test-$RunId"
 
 Write-Host "Checking Docker Engine..."
@@ -34,14 +34,14 @@ function Start-TestContainer {
     )
 
     $name = "$Prefix-$Scenario"
-    $args = @(
+    $dockerArgs = @(
         "run", "-d",
         "--name", $name,
         "--label", $Label,
         "--label", "devops.ai.monitor.scenario=$Scenario"
     ) + $ExtraArgs + @($Image) + $Command
 
-    & docker @args
+    & docker @dockerArgs
     if ($LASTEXITCODE -ne 0) {
         throw "Failed to create scenario $Scenario."
     }
@@ -69,11 +69,11 @@ Start-TestContainer -Scenario "high-cpu" -ExtraArgs @("--cpus", "0.5") -Command 
 )
 
 Start-TestContainer -Scenario "high-memory" -ExtraArgs @(
-    "--memory", "100m",
-    "--tmpfs", "/run/test-memory:rw,size=92m"
+    "--memory", "128m",
+    "--tmpfs", "/run/test-memory:rw,size=120m"
 ) -Command @(
     "sh", "-c",
-    "dd if=/dev/zero of=/run/test-memory/fill bs=1M count=88 2>/dev/null; sleep 600"
+    "dd if=/dev/zero of=/run/test-memory/fill bs=1M count=112 2>/dev/null; sleep 600"
 )
 
 Write-Host ""
