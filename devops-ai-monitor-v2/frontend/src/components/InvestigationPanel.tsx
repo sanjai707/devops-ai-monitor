@@ -1,6 +1,12 @@
 import { AlertTriangle, BrainCircuit, ClipboardCheck, FileSearch, ListChecks, RotateCw, ShieldCheck } from 'lucide-react'
 import { useState } from 'react'
-import type { Incident, Investigation, InvestigationRecommendation } from '../types/api'
+import type {
+  Incident,
+  Investigation,
+  InvestigationRecommendation,
+  InvestigationFollowup,
+  FollowupActionId,
+} from '../types/api'
 import { formatDate } from '../utils/format'
 import { StatusBadge } from './StatusBadge'
 
@@ -10,7 +16,10 @@ type Props = {
   loading: boolean
   error: string | null
   busy: boolean
+  followups: InvestigationFollowup[]
+  followupBusyId: FollowupActionId | null
   onInvestigate: (id: number) => void
+  onApproveFollowup: (actionId: FollowupActionId) => void
   onFeedback: (feedbackType: string, userCorrection?: string) => void
 }
 
@@ -29,7 +38,18 @@ function StringList({ title, items, icon: Icon, tone = '' }: {
   )
 }
 
-export function InvestigationPanel({ incident, investigation, loading, error, busy, onInvestigate, onFeedback }: Props) {
+export function InvestigationPanel({
+  incident,
+  investigation,
+  loading,
+  error,
+  busy,
+  followups,
+  followupBusyId,
+  onInvestigate,
+  onApproveFollowup,
+  onFeedback,
+}: Props) {
   const result = investigation?.structured_json
   const [correction, setCorrection] = useState('')
   const evidenceById = new Map((result?.evidence_inventory || []).map((item) => [item.id, item]))
@@ -74,6 +94,33 @@ export function InvestigationPanel({ incident, investigation, loading, error, bu
               {item.verification_steps.length > 0 && <p>Verify: {item.verification_steps.join('; ')}</p>}
               {corrective && <p>Rollback: {item.rollback_considerations}</p>}
               <EvidenceRefs ids={item.evidence_ids} />
+              {!corrective && item.followup_action_id && (() => {
+                const existing = followups.find((entry) =>
+                  entry.source_investigation_id === investigation?.id
+                  && entry.action_id === item.followup_action_id,
+                )
+                return (
+                  <div className="followup-approval">
+                    <p>Optional follow-up: collect only this container's {item.followup_action_id === 'docker.container-events' ? 'Docker lifecycle events' : 'timestamped stdout/stderr logs'} in the incident time window (maximum 15 minutes), then reassess with the new evidence.</p>
+                    {existing ? (
+                      <small>
+                        Collection {existing.status}
+                        {existing.reassessment_investigation_id
+                          ? ` · reassessment #${existing.reassessment_investigation_id}`
+                          : ''}
+                      </small>
+                    ) : (
+                      <button
+                        className="button-secondary"
+                        disabled={followupBusyId !== null || busy || !incident || !investigation}
+                        onClick={() => onApproveFollowup(item.followup_action_id as FollowupActionId)}
+                      >
+                        {followupBusyId === item.followup_action_id ? 'Collecting evidence…' : 'Approve collection & reassess'}
+                      </button>
+                    )}
+                  </div>
+                )
+              })()}
             </article>
           ))}
         </div>
