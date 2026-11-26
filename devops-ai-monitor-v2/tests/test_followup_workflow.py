@@ -61,7 +61,7 @@ class FakeClient:
                     "ID": "container-full-id",
                     "Attributes": {
                         "name": "sample",
-                        "image": "busybox:latest",
+                        "image": "https://registry-user:registry-pass@registry.example/busybox:latest",
                         "exitCode": "137",
                         "password": "must-not-be-included",
                     },
@@ -120,6 +120,8 @@ class FollowupWorkflowTests(unittest.TestCase):
         )
         self.assertEqual(result["item_count"], 1)
         self.assertEqual(result["events"][0]["action"], "die")
+        self.assertIn("[REDACTED]@registry.example", result["events"][0]["attributes"]["image"])
+        self.assertNotIn("registry-pass", repr(result))
         self.assertEqual(
             set(result["events"][0]["attributes"]),
             {"name", "image", "exitCode"},
