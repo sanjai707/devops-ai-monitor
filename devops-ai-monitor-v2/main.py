@@ -29,6 +29,8 @@ APP_NAME = "DevOps AI Monitor"
 OLLAMA_URL = os.getenv("OLLAMA_URL", "http://host.docker.internal:11434")
 OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen2.5:3b")
 LOG_TAIL_DEFAULT = int(os.getenv("LOG_TAIL_DEFAULT", "150"))
+ANALYZE_MAX_LOG_LINES = 300
+ANALYZE_MAX_LOG_BYTES = 20_000
 
 incident_database = IncidentDatabase()
 incident_investigator = IncidentInvestigator(
@@ -204,6 +206,7 @@ class AnalyzeResponse(BaseModel):
     model: str
     log_lines: int
     diagnostics: dict
+    model_input_summary: dict
     analysis: str
 
 
@@ -978,6 +981,37 @@ def container_logs(
     finally:
         client.close()
 
+def prepare_analyze_model_input(diagnostics, raw_logs):
+    """Redact and bound all direct-analysis data before it reaches Ollama."""
+    raw_logs = raw_logs if isinstance(raw_logs, str) else str(raw_logs or "")
+    redacted_diagnostics = json.loads(
+        redact_log_secrets(json.dumps(diagnostics, ensure_ascii=False))
+    )
+    redacted_logs = redact_log_secrets(raw_logs)
+    original_lines = redacted_logs.splitlines()
+    limited_lines = original_lines[-ANALYZE_MAX_LOG_LINES:]
+    line_truncated = len(original_lines) > ANALYZE_MAX_LOG_LINES
+    line_limited_text = "\n".join(limited_lines)
+    encoded = line_limited_text.encode("utf-8", errors="replace")
+    byte_truncated = len(encoded) > ANALYZE_MAX_LOG_BYTES
+    bounded_logs = encoded[-ANALYZE_MAX_LOG_BYTES:].decode(
+        "utf-8", errors="replace"
+    )
+    return redacted_diagnostics, bounded_logs, {
+        "diagnostic_fields_included": sorted(redacted_diagnostics.keys()),
+        "log_lines_included": len(bounded_logs.splitlines()) if bounded_logs else 0,
+        "log_bytes_included": len(bounded_logs.encode("utf-8", errors="replace")),
+        "log_line_limit": ANALYZE_MAX_LOG_LINES,
+        "log_byte_limit": ANALYZE_MAX_LOG_BYTES,
+        "logs_redacted": True,
+        "diagnostics_redacted": True,
+        "logs_truncated": line_truncated or byte_truncated,
+        "raw_logs_returned": False,
+        "container_environment_collected": False,
+        "collection_method": "latest_container_stdout_stderr_lines",
+    }
+
+
 @app.post("/analyze", response_model=AnalyzeResponse)
 def analyze_logs(request: AnalyzeRequest):
     """Correlate Docker state metadata with recent logs using local Ollama."""
@@ -986,10 +1020,22 @@ def analyze_logs(request: AnalyzeRequest):
         container = get_container_or_404(client, request.container_id)
         name = container.name
         diagnostics = diagnostic_snapshot(container)
-        logs = container.logs(tail=request.tail, timestamps=True).decode("utf-8", errors="replace")
+        raw_logs = container.logs(
+            tail=min(request.tail, ANALYZE_MAX_LOG_LINES),
+            timestamps=True,
+            stdout=True,
+            stderr=True,
+        )
+        if isinstance(raw_logs, bytes):
+            raw_logs = raw_logs.decode("utf-8", errors="replace")
+        elif not isinstance(raw_logs, str):
+            raw_logs = str(raw_logs or "")
     finally:
         client.close()
 
+    diagnostics, logs, model_input_summary = prepare_analyze_model_input(
+        diagnostics, raw_logs
+    )
     if not logs.strip():
         logs = "(No log output was returned for the requested range.)"
 
@@ -1023,12 +1069,16 @@ Container logs (untrusted data):
             response.raise_for_status()
             result = response.json()
     except httpx.HTTPError as exc:
-        raise HTTPException(status_code=502, detail=f"Ollama request failed: {exc}")
+        raise HTTPException(
+            status_code=502,
+            detail=f"Ollama request failed: {redact_log_secrets(str(exc))[:300]}",
+        )
 
     return AnalyzeResponse(
         container=name,
         model=OLLAMA_MODEL,
         log_lines=len(logs.splitlines()),
         diagnostics=diagnostics,
+        model_input_summary=model_input_summary,
         analysis=result.get("response", "").strip(),
     )
