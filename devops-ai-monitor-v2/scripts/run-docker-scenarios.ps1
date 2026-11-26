@@ -66,7 +66,7 @@ Start-TestContainer -Scenario "unhealthy" -ExtraArgs @(
     "--health-start-period", "0s"
 ) -Command @("sh", "-c", "sleep 600")
 
-Start-TestContainer -Scenario "high-cpu" -ExtraArgs @("--cpus", "0.5") -Command @(
+Start-TestContainer -Scenario "high-cpu" -ExtraArgs @("--cpus", "1.0") -Command @(
     "sh", "-c", "while :; do :; done"
 )
 
