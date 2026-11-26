@@ -352,3 +352,13 @@ tbody tr:hover { background: #121a24; }
 .followup-approval p { margin: 0; color: #93a4b7; font-size: 9px; line-height: 1.55; }
 .followup-approval small { color: #8fc9a9; font-size: 9px; }
 .followup-approval button { justify-self: start; }
+
+
+.followup-history { border: 1px solid #283746; border-radius: 7px; background: #111a24; padding: 10px; }
+.followup-history-list { display: grid; gap: 8px; }
+.followup-history-card { display: grid; gap: 5px; min-width: 0; border: 1px solid #25313e; border-radius: 6px; background: #0e151e; padding: 9px; }
+.followup-history-heading { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.followup-history-heading strong { color: #c4cfdb; font-size: 9px; }
+.followup-history-card p { margin: 0; color: #b7c3d0; font-size: 9px; line-height: 1.55; }
+.followup-history-card small { color: #7d8da1; font-size: 8px; line-height: 1.5; overflow-wrap: anywhere; }
+.followup-history-card .followup-history-limitation { color: #e5bd67; }
