@@ -320,6 +320,7 @@ class IncidentInvestigator:
             followup_payload = {
                 "followup_id": followup["id"],
                 "action_id": followup["action_id"],
+                "approved_request": followup.get("request") or {},
                 "status": followup["status"],
                 "approved_by": followup["approved_by"],
                 "approved_at": followup["approved_at"],
