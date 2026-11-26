@@ -1,4 +1,6 @@
+import importlib
 import os
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -6,7 +8,7 @@ from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 
-import main
+import database as database_module
 from database import IncidentDatabase
 from followup_collector import collect_approved_read_only_followup
 
@@ -184,13 +186,17 @@ class FollowupWorkflowTests(unittest.TestCase):
                 def enqueue(self, incident_id, force=False):
                     return db.create_investigation(incident_id, force=force)
 
-            with (
-                patch.object(main, "incident_database", db),
-                patch.object(main, "incident_investigator", FakeInvestigator()),
-                patch.object(main, "docker_client", lambda: fake_client),
-                patch.dict(os.environ, {"API_KEY": ""}),
-            ):
-                client = TestClient(main.app)
+            previous_main = sys.modules.pop("main", None)
+            try:
+                with patch.object(database_module, "IncidentDatabase", return_value=db):
+                    with patch.dict(os.environ, {"API_KEY": ""}):
+                        main_module = importlib.import_module("main")
+                with (
+                    patch.object(main_module, "incident_database", db),
+                    patch.object(main_module, "incident_investigator", FakeInvestigator()),
+                    patch.object(main_module, "docker_client", lambda: fake_client),
+                ):
+                    client = TestClient(main_module.app)
                 rejected = client.post(
                     f"/incidents/{incident['id']}/investigation-followups",
                     json={
@@ -220,14 +226,18 @@ class FollowupWorkflowTests(unittest.TestCase):
                 )
                 self.assertTrue(fake_client.closed)
 
-                duplicate = client.post(
-                    f"/incidents/{incident['id']}/investigation-followups",
-                    json={
-                        "source_investigation_id": source["id"],
-                        "followup_action_id": "docker.container-events",
-                    },
-                )
-                self.assertEqual(duplicate.status_code, 409)
+                    duplicate = client.post(
+                        f"/incidents/{incident['id']}/investigation-followups",
+                        json={
+                            "source_investigation_id": source["id"],
+                            "followup_action_id": "docker.container-events",
+                        },
+                    )
+                    self.assertEqual(duplicate.status_code, 409)
+            finally:
+                sys.modules.pop("main", None)
+                if previous_main is not None:
+                    sys.modules["main"] = previous_main
 
 
 if __name__ == "__main__":
