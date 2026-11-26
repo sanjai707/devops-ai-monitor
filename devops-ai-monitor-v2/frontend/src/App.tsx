@@ -295,6 +295,9 @@ export default function App() {
       queueState.refresh()
     } catch (error) {
       setActionError(error instanceof Error ? error.message : 'Unable to collect approved evidence')
+      followupState.refresh()
+      selectedInvestigationState.refresh()
+      investigationsState.refresh()
     } finally {
       setFollowupBusyId(null)
     }
