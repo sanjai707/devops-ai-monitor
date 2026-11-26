@@ -160,6 +160,32 @@ export function InvestigationPanel({
           {investigation.status === 'failed' && <div className="inline-notice notice-error"><AlertTriangle size={15} /><span><b>Investigation failed.</b> {investigation.error_details || 'The worker could not complete this investigation.'}</span></div>}
           {(investigation.status === 'pending' || investigation.status === 'processing') && <div className="inline-notice notice-info"><span className="loader" /> Investigation is {investigation.status}; this panel refreshes automatically.</div>}
 
+          {followups.length > 0 && (
+            <div className="investigation-section followup-history">
+              <h4>Approved evidence follow-ups</h4>
+              <div className="followup-history-list">
+                {followups.map((item) => (
+                  <article className="followup-history-card" key={item.id}>
+                    <div className="followup-history-heading">
+                      <strong>{item.action_id === 'docker.container-events' ? 'Docker lifecycle events' : 'Timestamped container logs'}</strong>
+                      <StatusBadge value={item.status} />
+                    </div>
+                    <p>{String(item.request.description || 'Operator-approved bounded evidence collection')}</p>
+                    <small>Approved by {item.approved_by} · {formatDate(item.approved_at)}</small>
+                    {item.time_window.start && item.time_window.end && (
+                      <small>Evidence window: {formatDate(String(item.time_window.start))} – {formatDate(String(item.time_window.end))}</small>
+                    )}
+                    {item.reassessment_investigation_id && (
+                      <small>Reassessment investigation #{item.reassessment_investigation_id}</small>
+                    )}
+                    {item.limitations.length > 0 && <small className="followup-history-limitation">{item.limitations.join(' ')}</small>}
+                    {item.error_details && <small className="followup-history-limitation">{item.error_details}</small>}
+                  </article>
+                ))}
+              </div>
+            </div>
+          )}
+
           {result && (
             <div className="investigation-result">
               <div className="summary-box">
