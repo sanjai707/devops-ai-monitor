@@ -696,7 +696,10 @@ def approve_investigation_followup(
     try:
         incident_time = datetime.fromisoformat(
             incident["created_at"].replace("Z", "+00:00")
-        ).astimezone(timezone.utc)
+        )
+        if incident_time.tzinfo is None:
+            incident_time = incident_time.replace(tzinfo=timezone.utc)
+        incident_time = incident_time.astimezone(timezone.utc)
     except (TypeError, ValueError):
         raise HTTPException(
             status_code=409, detail="Incident timestamp is unavailable or invalid"
@@ -708,11 +711,12 @@ def approve_investigation_followup(
     after_seconds = min(
         300, max(0, int(os.getenv("INVESTIGATION_WINDOW_AFTER_SECONDS", "300")))
     )
+    now = datetime.now(timezone.utc)
     window_start = incident_time - timedelta(seconds=before_seconds)
-    window_end = min(
-        datetime.now(timezone.utc),
-        incident_time + timedelta(seconds=after_seconds),
-    )
+    window_end = min(now, incident_time + timedelta(seconds=after_seconds))
+    # Clock skew must never turn a follow-up into a future-dated collection.
+    if window_start > now:
+        window_start = now
     if window_end < window_start:
         window_end = window_start
     start_epoch = int(window_start.timestamp())
