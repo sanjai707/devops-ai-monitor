@@ -10,6 +10,8 @@ import type {
   MonitorStatus,
   KnowledgeRecord,
   InvestigationFeedback,
+  InvestigationFollowup,
+  FollowupActionId,
 } from '../types/api'
 
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || '/api').replace(/\/$/, '')
@@ -73,6 +75,20 @@ export const api = {
     }),
   investigation: (id: number, signal?: AbortSignal) =>
     request<Investigation>(`/incidents/${id}/investigation`, { signal }),
+  investigationFollowups: (id: number, signal?: AbortSignal) =>
+    request<InvestigationFollowup[]>(`/incidents/${id}/investigation-followups`, { signal }),
+  approveInvestigationFollowup: (
+    id: number,
+    approval: { source_investigation_id: number; followup_action_id: FollowupActionId; approved_by?: string },
+  ) =>
+    request<{ approved: boolean; followup: InvestigationFollowup; reassessment_queued: boolean; reassessment: Investigation }>(
+      `/incidents/${id}/investigation-followups`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(approval),
+      },
+    ),
   investigate: (id: number) =>
     request<{ queued: boolean; investigation: Investigation }>(`/incidents/${id}/investigate`, { method: 'POST' }),
   investigations: (signal?: AbortSignal) =>
