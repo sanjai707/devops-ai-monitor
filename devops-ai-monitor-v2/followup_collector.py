@@ -72,7 +72,10 @@ def collect_approved_read_only_followup(
                     break
                 if not isinstance(event, dict):
                     continue
-                events.append(_normalize_event(event))
+                normalized = _normalize_event(event)
+                if normalized["action"] not in EVENT_ALLOWLIST:
+                    continue
+                events.append(normalized)
         finally:
             close = getattr(stream, "close", None)
             if callable(close):
