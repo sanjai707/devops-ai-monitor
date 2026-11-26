@@ -19,6 +19,11 @@ from monitor import DockerMonitor
 from evaluation import run_evaluation
 from providers import DockerProvider
 from telemetry import configure_telemetry, get_telemetry_status
+from followup_collector import (
+    FOLLOWUP_ACTIONS,
+    MAX_WINDOW_SECONDS,
+    collect_approved_read_only_followup,
+)
 
 APP_NAME = "DevOps AI Monitor"
 OLLAMA_URL = os.getenv("OLLAMA_URL", "http://host.docker.internal:11434")
@@ -237,6 +242,15 @@ class ReadOnlyCheckRequest(BaseModel):
         "docker.container-logs",
     ]
     container_id: str = Field(..., min_length=1, max_length=128)
+
+
+class InvestigationFollowupApprovalRequest(BaseModel):
+    source_investigation_id: int = Field(..., gt=0)
+    followup_action_id: Literal[
+        "docker.container-events",
+        "docker.container-logs",
+    ]
+    approved_by: str = Field(default="dashboard operator", min_length=1, max_length=80)
 
 
 class InvestigationFeedbackRequest(BaseModel):
@@ -609,6 +623,175 @@ def investigate_incident(
         raise HTTPException(status_code=404, detail="Incident not found")
     investigation, created = incident_investigator.enqueue(incident_id, force=force)
     return {"queued": created, "investigation": investigation}
+
+
+@app.get("/incidents/{incident_id}/investigation-followups")
+def list_incident_investigation_followups(incident_id: int):
+    if not incident_database.get(incident_id):
+        raise HTTPException(status_code=404, detail="Incident not found")
+    return incident_database.investigation_followups_for_incident(incident_id)
+
+
+@app.post("/incidents/{incident_id}/investigation-followups")
+def approve_investigation_followup(
+    incident_id: int,
+    request: InvestigationFollowupApprovalRequest,
+):
+    """Approve one exact, allowlisted read-only collection and queue reassessment."""
+    incident = incident_database.get(incident_id)
+    if not incident:
+        raise HTTPException(status_code=404, detail="Incident not found")
+
+    source = incident_database.get_investigation(request.source_investigation_id)
+    if not source or source["incident_id"] != incident_id:
+        raise HTTPException(
+            status_code=404, detail="Source investigation not found for this incident"
+        )
+    if source["status"] != "completed" or not source.get("structured_json"):
+        raise HTTPException(
+            status_code=409, detail="Only a completed investigation can request follow-up evidence"
+        )
+
+    result = source["structured_json"]
+    recommendations = result.get("read_only_checks") or []
+    recommendation = next(
+        (
+            item for item in recommendations
+            if item.get("followup_action_id") == request.followup_action_id
+            and item.get("evidence_ids")
+        ),
+        None,
+    )
+    if recommendation is None or request.followup_action_id not in FOLLOWUP_ACTIONS:
+        raise HTTPException(
+            status_code=409,
+            detail="This investigation did not request that supported evidence collection",
+        )
+
+    existing = incident_database.investigation_followups_for_incident(incident_id)
+    if any(
+        item["source_investigation_id"] == source["id"]
+        and item["action_id"] == request.followup_action_id
+        for item in existing
+    ):
+        raise HTTPException(
+            status_code=409,
+            detail="This follow-up request has already been approved for this investigation",
+        )
+
+    try:
+        incident_time = datetime.fromisoformat(
+            incident["created_at"].replace("Z", "+00:00")
+        ).astimezone(timezone.utc)
+    except (TypeError, ValueError):
+        raise HTTPException(
+            status_code=409, detail="Incident timestamp is unavailable or invalid"
+        )
+
+    before_seconds = min(
+        600, max(60, int(os.getenv("INVESTIGATION_WINDOW_BEFORE_SECONDS", "600")))
+    )
+    after_seconds = min(
+        300, max(0, int(os.getenv("INVESTIGATION_WINDOW_AFTER_SECONDS", "300")))
+    )
+    window_start = incident_time - timedelta(seconds=before_seconds)
+    window_end = min(
+        datetime.now(timezone.utc),
+        incident_time + timedelta(seconds=after_seconds),
+    )
+    if window_end < window_start:
+        window_end = window_start
+    start_epoch = int(window_start.timestamp())
+    end_epoch = int(window_end.timestamp())
+    if end_epoch - start_epoch > MAX_WINDOW_SECONDS:
+        raise HTTPException(status_code=400, detail="Follow-up window exceeds the safety limit")
+
+    actor = redact_log_secrets(request.approved_by.strip())[:80] or "dashboard operator"
+    window = {
+        "start": window_start.strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "end": window_end.strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "start_epoch": start_epoch,
+        "end_epoch": end_epoch,
+        "basis": "incident_created_at",
+    }
+    try:
+        followup = incident_database.create_investigation_followup({
+            "incident_id": incident_id,
+            "source_investigation_id": source["id"],
+            "container_id": incident["container_id"],
+            "action_id": request.followup_action_id,
+            "approved_by": actor,
+            "approved_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "time_window": window,
+        })
+    except Exception as exc:
+        # A concurrent duplicate approval is rejected by the database uniqueness constraint.
+        if type(exc).__name__ == "IntegrityError":
+            raise HTTPException(status_code=409, detail="This follow-up was already approved")
+        raise
+
+    client = None
+    try:
+        client = docker_client()
+        container = get_container_or_404(client, incident["container_id"])
+        collected = collect_approved_read_only_followup(
+            client, container, request.followup_action_id, start_epoch, end_epoch
+        )
+        has_items = collected.get("item_count", 0) > 0
+        limitations = []
+        if not has_items:
+            limitations.append(
+                "No matching data was returned for this bounded collection window; absence does not prove that no event or error occurred."
+            )
+        if collected.get("possibly_truncated"):
+            limitations.append(
+                "The log result reached its configured line or byte limit and may be truncated."
+            )
+        followup = incident_database.complete_investigation_followup(
+            followup["id"],
+            collected,
+            status="collected" if has_items else "unavailable",
+            limitations=limitations,
+        )
+    except HTTPException as exc:
+        incident_database.complete_investigation_followup(
+            followup["id"],
+            {"reason": "Docker evidence collection could not be completed."},
+            status="unavailable" if exc.status_code == 404 else "failed",
+            limitations=["The source container or Docker Engine was unavailable during approved collection."],
+            error_details=f"HTTP {exc.status_code}",
+        )
+        raise
+    except Exception as exc:
+        incident_database.complete_investigation_followup(
+            followup["id"],
+            {"reason": "Docker evidence collection failed."},
+            status="failed",
+            limitations=["No collected output is available for reassessment."],
+            error_details=type(exc).__name__,
+        )
+        raise HTTPException(
+            status_code=503,
+            detail="Approved evidence collection failed. Check Docker Engine and application logs.",
+        ) from exc
+    finally:
+        if client is not None:
+            client.close()
+
+    if followup["status"] == "failed":
+        raise HTTPException(status_code=503, detail="Approved evidence collection failed")
+    reassessment, queued = incident_investigator.enqueue(incident_id, force=True)
+    incident_database.link_followup_reassessment(followup["id"], reassessment["id"])
+    followup = next(
+        item for item in incident_database.investigation_followups_for_incident(incident_id)
+        if item["id"] == followup["id"]
+    )
+    return {
+        "approved": True,
+        "followup": followup,
+        "reassessment_queued": queued,
+        "reassessment": reassessment,
+    }
 
 
 @app.get("/investigations")
