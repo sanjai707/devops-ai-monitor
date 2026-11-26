@@ -781,14 +781,18 @@ def approve_investigation_followup(
             limitations=limitations,
         )
     except HTTPException as exc:
-        incident_database.complete_investigation_followup(
+        followup = incident_database.complete_investigation_followup(
             followup["id"],
             {"reason": "Docker evidence collection could not be completed."},
             status="unavailable" if exc.status_code == 404 else "failed",
             limitations=["The source container or Docker Engine was unavailable during approved collection."],
             error_details=f"HTTP {exc.status_code}",
         )
-        raise
+        if exc.status_code != 404:
+            raise HTTPException(
+                status_code=503,
+                detail="Approved evidence collection could not reach Docker Engine.",
+            ) from exc
     except Exception as exc:
         incident_database.complete_investigation_followup(
             followup["id"],
