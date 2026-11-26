@@ -33,6 +33,7 @@ import type {
   ContainerDiagnostics,
   Investigation,
   MetricHistoryResponse,
+  FollowupActionId,
 } from './types/api'
 import { formatDate } from './utils/format'
 
@@ -87,6 +88,7 @@ export default function App() {
   const [busyIncidentId, setBusyIncidentId] = useState<number | null>(null)
   const [manualBusy, setManualBusy] = useState(false)
   const [knowledgeBusyId, setKnowledgeBusyId] = useState<number | null>(null)
+  const [followupBusyId, setFollowupBusyId] = useState<FollowupActionId | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
   const selectedIncident = incidents.find((incident) => incident.id === selectedIncidentId) || null
 
@@ -120,6 +122,13 @@ export default function App() {
     5_000,
     [selectedIncidentId],
   )
+  const followupLoader = useCallback(
+    (signal: AbortSignal) => selectedIncidentId
+      ? api.investigationFollowups(selectedIncidentId, signal)
+      : Promise.resolve([]),
+    [selectedIncidentId],
+  )
+  const followupState = usePolling(followupLoader, 5_000, [selectedIncidentId])
   const displayedInvestigation = selectedInvestigationState.data?.incident_id === selectedIncidentId
     ? selectedInvestigationState.data
     : null
@@ -267,6 +276,27 @@ export default function App() {
       setActionError(error instanceof Error ? error.message : 'Unable to queue investigation')
     } finally {
       setManualBusy(false)
+    }
+  }
+
+  const handleApproveFollowup = async (actionId: FollowupActionId) => {
+    if (!selectedIncident || !displayedInvestigation) return
+    setFollowupBusyId(actionId)
+    setActionError(null)
+    try {
+      await api.approveInvestigationFollowup(selectedIncident.id, {
+        source_investigation_id: displayedInvestigation.id,
+        followup_action_id: actionId,
+        approved_by: 'dashboard operator',
+      })
+      followupState.refresh()
+      selectedInvestigationState.refresh()
+      investigationsState.refresh()
+      queueState.refresh()
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : 'Unable to collect approved evidence')
+    } finally {
+      setFollowupBusyId(null)
     }
   }
 
@@ -421,6 +451,9 @@ export default function App() {
                   error={selectedInvestigationState.error}
                   busy={manualBusy}
                   onInvestigate={handleInvestigate}
+                  onApproveFollowup={handleApproveFollowup}
+                  followups={followupState.data || []}
+                  followupBusyId={followupBusyId}
                   onFeedback={handleInvestigationFeedback}
                 />
                 <InvestigationHistory
