@@ -11,6 +11,9 @@
 - Optional `API_KEY` middleware can require `X-API-Key` for mutations and knowledge endpoints.
 - CORS origins are restricted by `CORS_ALLOWED_ORIGINS`.
 - Remediation execution is disabled by `REMEDIATION_DISABLED=true` by default.
+- Investigation follow-up collection accepts only two server-side allowlisted read-only Docker API operations: bounded lifecycle events and bounded timestamped logs. It never accepts shell commands or state-changing Docker actions.
+- Follow-up collection requires a separate dashboard/API approval for the exact action recommended by a completed investigation. The server binds it to the incident container and computes the timestamp window; the client cannot override either.
+- Approval snapshots, operator label, time window, collection status, result, limitations and reassessment ID are persisted in SQLite. The operator label is self-reported and is not a verified human identity.
 - Production Compose requires Ollama URL, CORS origins and API key variables.
 
 ## Remaining requirements
@@ -47,6 +50,28 @@ VERIFIED LIMITATIONS:
 - Secret redaction is pattern-based and can miss unknown secret formats.
 - Audit history records application actions but does not establish real-user
   identity or approval signatures.
+
+## Staged investigation follow-up controls
+
+- Only `docker.container-events` and `docker.container-logs` are accepted.
+- The server verifies that the selected action was recommended by the completed
+  investigation and that its evidence references still exist in the collected
+  evidence inventory.
+- Collection is fixed to the incident's container. The time range is computed
+  server-side and cannot exceed 15 minutes.
+- Event output is capped at 100 records and uses an event/attribute allowlist.
+  Log output is capped at 300 lines / 20 KB and uses pattern-based secret
+  redaction. Unknown secret formats may still pass through.
+- Collection output and its limitations are stored in SQLite and included in
+  the next investigation's evidence inventory. Treat this database as
+  operational data: protect backups and restrict volume access.
+- The approval endpoint remains subject to the existing optional API-key
+  middleware. A locally empty API key does not authenticate the operator.
+  `approved_by` is a label supplied by the client, not an identity assertion,
+  signature or non-repudiation control.
+- The Docker socket remains a privileged host capability. This feature narrows
+  application behavior but does not make the Docker API socket itself
+  intrinsically read-only.
 
 ## Runtime authentication audit
 
