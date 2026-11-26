@@ -66,7 +66,17 @@ class FakeClient:
                         "password": "must-not-be-included",
                     },
                 },
-            }
+            },
+            {
+                "Type": "container",
+                "Action": "health_status: unhealthy",
+                "time": 1795687201,
+                "timeNano": 1795687201000000000,
+                "Actor": {
+                    "ID": "container-full-id",
+                    "Attributes": {"name": "sample", "health_status": "unhealthy"},
+                },
+            },
         ])
 
     def close(self):
@@ -118,8 +128,9 @@ class FollowupWorkflowTests(unittest.TestCase):
         result = collect_approved_read_only_followup(
             client, client.container, "docker.container-events", 100, 200
         )
-        self.assertEqual(result["item_count"], 1)
+        self.assertEqual(result["item_count"], 2)
         self.assertEqual(result["events"][0]["action"], "die")
+        self.assertEqual(result["events"][1]["action"], "health_status: unhealthy")
         self.assertIn("[REDACTED]@registry.example", result["events"][0]["attributes"]["image"])
         self.assertNotIn("registry-pass", repr(result))
         self.assertEqual(
