@@ -173,7 +173,7 @@ test('dashboard incident actions and approved evidence follow-up use the browser
   const pageErrors: string[] = []
   page.on('pageerror', (error) => pageErrors.push(error.message))
   await page.goto('/')
-  await expect(page.getByRole('heading', { name: 'Incident center' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Incident center', exact: true }).first()).toBeVisible()
 
   await page.getByRole('button', { name: 'Ack' }).click()
   await expect(page.getByText('Acknowledged', { exact: true }).first()).toBeVisible()
