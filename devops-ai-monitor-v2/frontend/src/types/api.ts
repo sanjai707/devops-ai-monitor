@@ -147,6 +147,7 @@ export type InvestigationFollowup = {
   approved_at: string
   collected_at: string | null
   time_window: Record<string, string | number>
+  request: Record<string, unknown>
   result: Record<string, unknown> | null
   limitations: string[]
   error_details: string | null
