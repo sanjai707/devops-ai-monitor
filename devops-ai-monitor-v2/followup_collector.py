@@ -75,7 +75,8 @@ def collect_approved_read_only_followup(
                 if not isinstance(event, dict):
                     continue
                 normalized = _normalize_event(event)
-                if normalized["action"] not in EVENT_ALLOWLIST:
+                event_name = normalized["action"].split(":", 1)[0].strip()
+                if event_name not in EVENT_ALLOWLIST:
                     continue
                 events.append(normalized)
         finally:
