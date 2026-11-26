@@ -137,6 +137,12 @@ class FollowupWorkflowTests(unittest.TestCase):
             set(result["events"][0]["attributes"]),
             {"name", "image", "exitCode"},
         )
+        self.assertEqual(
+            result["events"][1]["attributes"],
+            {"name": "sample", "health_status": "unhealthy"},
+        )
+        self.assertIn("health_status: healthy", client.event_args["filters"]["event"])
+        self.assertIn("health_status: unhealthy", client.event_args["filters"]["event"])
         self.assertEqual(client.event_args["filters"]["container"], ["container-full-id"])
         self.assertEqual(client.event_args["since"], 100)
         self.assertEqual(client.event_args["until"], 200)
