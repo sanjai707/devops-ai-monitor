@@ -41,7 +41,7 @@ current branch has been exercised:
   `docker compose --profile telemetry config --quiet` completed without
   errors on the local checkout.
 - The current feature branch subsequently added the approved follow-up
-  collector/API, persistence and dashboard controls, nine follow-up tests,
+  collector/API, persistence and dashboard controls, ten follow-up and direct-analysis privacy tests,
   two previously undiscovered audit tests, a Playwright browser test, a live
   Ollama evaluation CLI, Docker scenario scripts and CI. These additions have
   **not yet been run in the user's local environment or reported green by CI**.
