@@ -110,6 +110,31 @@ class IncidentDatabase:
             )
             connection.execute(
                 """
+                CREATE TABLE IF NOT EXISTS investigation_followups (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    incident_id INTEGER NOT NULL REFERENCES incidents(id),
+                    source_investigation_id INTEGER NOT NULL REFERENCES investigations(id),
+                    reassessment_investigation_id INTEGER REFERENCES investigations(id),
+                    container_id TEXT NOT NULL,
+                    action_id TEXT NOT NULL,
+                    status TEXT NOT NULL,
+                    approved_by TEXT NOT NULL,
+                    approved_at TEXT NOT NULL,
+                    collected_at TEXT,
+                    time_window_json TEXT NOT NULL,
+                    result_json TEXT,
+                    limitations_json TEXT NOT NULL DEFAULT '[]',
+                    error_details TEXT,
+                    created_at TEXT NOT NULL,
+                    UNIQUE(source_investigation_id, action_id)
+                )
+                """
+            )
+            connection.execute(
+                "CREATE INDEX IF NOT EXISTS idx_followups_incident ON investigation_followups(incident_id, id)"
+            )
+            connection.execute(
+                """
                 CREATE TABLE IF NOT EXISTS docker_events (
                     event_id TEXT PRIMARY KEY,
                     event_time TEXT NOT NULL,
@@ -305,8 +330,8 @@ class IncidentDatabase:
                 """
             )
             schema_version = connection.execute("PRAGMA user_version").fetchone()[0]
-            if schema_version < 6:
-                connection.execute("PRAGMA user_version = 6")
+            if schema_version < 7:
+                connection.execute("PRAGMA user_version = 7")
 
     def _row(self, row):
         if row is None:
@@ -744,6 +769,96 @@ class IncidentDatabase:
                 (incident_id, start_at, end_at),
             ).fetchall()
             return [dict(row) for row in rows]
+
+    def _investigation_followup_row(self, row):
+        if row is None:
+            return None
+        item = dict(row)
+        item["time_window"] = json.loads(item.pop("time_window_json") or "{}")
+        item["result"] = json.loads(item.pop("result_json") or "null")
+        item["limitations"] = json.loads(item.pop("limitations_json") or "[]")
+        return item
+
+    def create_investigation_followup(self, record):
+        """Persist an explicit operator approval before read-only collection starts."""
+        now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        with self.lock, self.connect() as connection:
+            cursor = connection.execute(
+                """
+                INSERT INTO investigation_followups
+                (incident_id, source_investigation_id, container_id, action_id,
+                 status, approved_by, approved_at, time_window_json,
+                 limitations_json, created_at)
+                VALUES (?, ?, ?, ?, 'collecting', ?, ?, ?, '[]', ?)
+                """,
+                (
+                    record["incident_id"], record["source_investigation_id"],
+                    record["container_id"], record["action_id"],
+                    record["approved_by"], record["approved_at"],
+                    json.dumps(record["time_window"]), now,
+                ),
+            )
+            row = connection.execute(
+                "SELECT * FROM investigation_followups WHERE id = ?",
+                (cursor.lastrowid,),
+            ).fetchone()
+            return self._investigation_followup_row(row)
+
+    def complete_investigation_followup(
+        self, followup_id, result, status="collected", limitations=None,
+        error_details=None, collected_at=None,
+    ):
+        if status not in {"collected", "unavailable", "failed"}:
+            raise ValueError("Invalid investigation follow-up status")
+        collected_at = collected_at or datetime.now(timezone.utc).strftime(
+            "%Y-%m-%dT%H:%M:%SZ"
+        )
+        with self.lock, self.connect() as connection:
+            connection.execute(
+                """
+                UPDATE investigation_followups
+                SET status = ?, result_json = ?, limitations_json = ?,
+                    error_details = ?, collected_at = ?
+                WHERE id = ?
+                """,
+                (
+                    status, json.dumps(result), json.dumps(limitations or []),
+                    (error_details or "")[:500] or None, collected_at, followup_id,
+                ),
+            )
+            row = connection.execute(
+                "SELECT * FROM investigation_followups WHERE id = ?",
+                (followup_id,),
+            ).fetchone()
+            return self._investigation_followup_row(row)
+
+    def link_followup_reassessment(self, followup_id, investigation_id):
+        with self.lock, self.connect() as connection:
+            connection.execute(
+                """
+                UPDATE investigation_followups
+                SET reassessment_investigation_id = ?
+                WHERE id = ?
+                """,
+                (investigation_id, followup_id),
+            )
+            row = connection.execute(
+                "SELECT * FROM investigation_followups WHERE id = ?",
+                (followup_id,),
+            ).fetchone()
+            return self._investigation_followup_row(row)
+
+    def investigation_followups_for_incident(self, incident_id):
+        with self.lock, self.connect() as connection:
+            rows = connection.execute(
+                """
+                SELECT * FROM investigation_followups
+                WHERE incident_id = ?
+                ORDER BY id ASC
+                """,
+                (incident_id,),
+            ).fetchall()
+            return [self._investigation_followup_row(row) for row in rows]
 
     def create_knowledge(self, record):
         now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
