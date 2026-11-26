@@ -133,6 +133,10 @@ class FollowupWorkflowTests(unittest.TestCase):
                 "source_investigation_id": investigation["id"],
                 "container_id": incident["container_id"],
                 "action_id": "docker.container-events",
+                "request": {
+                    "description": "Review lifecycle events.",
+                    "evidence_ids": ["INS-001"],
+                },
                 "approved_by": "operator",
                 "approved_at": "2026-11-26T10:01:00Z",
                 "time_window": {"start": "2026-11-26T09:50:00Z"},
@@ -144,6 +148,9 @@ class FollowupWorkflowTests(unittest.TestCase):
             self.assertEqual(completed["status"], "collected")
             self.assertEqual(completed["result"], {"events": []})
             self.assertEqual(completed["limitations"], ["bounded sample"])
+            self.assertEqual(
+                completed["request"]["evidence_ids"], ["INS-001"]
+            )
             reassessment, _ = db.create_investigation(incident["id"], force=True)
             db.link_followup_reassessment(followup["id"], reassessment["id"])
             stored = db.investigation_followups_for_incident(incident["id"])
