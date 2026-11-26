@@ -12,7 +12,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from starlette.responses import JSONResponse
 
-from ai_investigator import IncidentInvestigator, redact_log_secrets
+from ai_investigator import IncidentInvestigator, redact_log_secrets, redact_structured_data
 from database import IncidentDatabase
 from docker_event_collector import DockerEventCollector
 from incident_manager import IncidentManager
@@ -985,9 +985,7 @@ def container_logs(
 def prepare_analyze_model_input(diagnostics, raw_logs):
     """Redact and bound all direct-analysis data before it reaches Ollama."""
     raw_logs = raw_logs if isinstance(raw_logs, str) else str(raw_logs or "")
-    redacted_diagnostics = json.loads(
-        redact_log_secrets(json.dumps(diagnostics, ensure_ascii=False))
-    )
+    redacted_diagnostics = redact_structured_data(diagnostics)
     redacted_logs = redact_log_secrets(raw_logs)
     original_lines = redacted_logs.splitlines()
     limited_lines = original_lines[-ANALYZE_MAX_LOG_LINES:]
