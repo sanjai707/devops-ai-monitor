@@ -29,18 +29,50 @@ curl.exe http://127.0.0.1:3000
 - The Docker monitor restarts its polling loop.
 - The Docker event collector reconnects with bounded backoff.
 
-## Independent audit status
+## Validation status and evidence
 
-- The pre-branch audit passed 23 backend tests using isolated SQLite databases. This branch adds five tests (two incident/queue tests and three telemetry configuration tests), for 28 total discovered tests; the updated suite has not yet been executed.
-- TypeScript typecheck and frontend production build passed.
-- Local and production Compose files parsed successfully.
-- Host live API returned `api: ok`; Docker and Ollama were unavailable because
-  the Docker daemon was stopped and no Ollama service was reachable.
-- Host dashboard and `/api/health` proxy returned HTTP 200.
-- Docker recovery, Ollama outage/recovery and browser-console validation were
-  completed and are VERIFIED.
-- Live frontend mutation workflows and external TLS/RBAC deployment remain
-  BLOCKED or unimplemented.
+The following are dated observations, not a claim that every feature in the
+current branch has been exercised:
+
+- On 2026-11-26, before the staged follow-up workflow was added, the developer
+  ran the backend unittest discovery command locally: 26 tests passed. The
+  command output is the evidence for that checkout only.
+- On the same date, both `docker compose config --quiet` and
+  `docker compose --profile telemetry config --quiet` completed without
+  errors on the local checkout.
+- The current feature branch subsequently added the approved follow-up
+  collector/API, persistence and dashboard controls, six follow-up tests,
+  two previously undiscovered audit tests, a Playwright browser test, a live
+  Ollama evaluation CLI, Docker scenario scripts and CI. These additions have
+  **not yet been run in the user's local environment or reported green by CI**.
+- Earlier type-check/build and API checks applied to a prior revision. Re-run
+  the frontend checks on the current branch before treating the new UI as
+  verified.
+- Docker end-to-end scenarios and real Ollama inference evaluation remain
+  pending. A prior local Docker image pull was interrupted with a CloudFront
+  `EOF`; this is a registry/network transfer failure, not evidence that the
+  Compose files or application started successfully.
+- The browser test uses a controlled API fixture to exercise the dashboard
+  interaction path. It is not a live Docker or Ollama test.
+- The real-model evaluation returns actual Ollama responses for curated
+  evidence fixtures, but does not report root-cause accuracy because there are
+  no independently adjudicated labels.
+
+## Current branch validation commands
+
+Run from `devops-ai-monitor-v2`:
+
+```powershell
+python -m unittest discover -s tests -p "test_*.py" -v
+npm.cmd --prefix frontend run typecheck
+npm.cmd --prefix frontend run build
+docker compose config --quiet
+docker compose --profile telemetry config --quiet
+```
+
+The GitHub Actions workflow also installs Chromium and runs the Playwright
+dashboard test. The local Docker scenario runner and actual Ollama evaluation
+are intentionally opt-in because they create load or invoke the local model.
 
 ## SQLite production limitations
 
