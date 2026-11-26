@@ -11,6 +11,7 @@ from fastapi.testclient import TestClient
 
 import database as database_module
 from database import IncidentDatabase
+from ai_investigator import redact_structured_data
 from followup_collector import collect_approved_read_only_followup
 from evaluation import run_live_model_evaluation
 
@@ -88,6 +89,24 @@ def incident_record():
 
 
 class FollowupWorkflowTests(unittest.TestCase):
+    def test_structured_redaction_removes_secret_fields_and_redacts_string_values(self):
+        source = {
+            "status": "failed",
+            "api_key": "structured-secret",
+            "nested": {
+                "Authorization": "Bearer abc.def.ghi",
+                "message": "password=inline-secret",
+                "safe": "no sensitive data",
+            },
+        }
+        redacted = redact_structured_data(source)
+        self.assertEqual(redacted["api_key"], "[REDACTED]")
+        self.assertEqual(redacted["nested"]["Authorization"], "[REDACTED]")
+        self.assertNotIn("structured-secret", repr(redacted))
+        self.assertNotIn("abc.def.ghi", repr(redacted))
+        self.assertNotIn("inline-secret", repr(redacted))
+        self.assertEqual(redacted["nested"]["safe"], "no sensitive data")
+
     def test_only_allowlisted_read_only_actions_are_supported(self):
         with self.assertRaisesRegex(ValueError, "Unsupported"):
             collect_approved_read_only_followup(
