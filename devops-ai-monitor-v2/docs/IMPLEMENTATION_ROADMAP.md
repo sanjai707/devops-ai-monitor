@@ -9,7 +9,7 @@
 | 4 Evidence investigation | Tested / Verified | Evidence inventory, timeline, strict validation, low-confidence exit-137 handling verified |
 | 5 Knowledge/memory | Tested / Verified | Approved-only SQLite retrieval, version history and Knowledge Center verified |
 | 6 Feedback | Tested / Verified | Feedback persistence, analytics, review workflow and proposed correction knowledge verified |
-| 7 Evaluation | In progress | Phase 15 expands deterministic evidence-quality coverage to 30 cases; real-model accuracy remains unscored pending independently adjudicated labels |
+| 7 Evaluation | Tested / Partially verified | 30-case v3.0.0 deterministic validator gate passes; live Qwen outputs still require human review and root-cause accuracy remains unscored without adjudicated labels |
 | 8 Runbooks | Implemented / partially Verified | Knowledge category/search/versioning supports runbooks; specialized runbook library remains |
 | 9 Safe remediation | Implemented / safety-verified | Read-only allowlist and emergency disable implemented; no changing action executes |
 | 10 Multi-provider | Implemented / partially Verified | Docker provider interface live; Kubernetes/AWS remain unavailable external providers |
@@ -17,6 +17,7 @@
 | 12 Dashboard | Tested / Partially Verified | Typecheck/build and live browser desktop/narrow smoke checks passed with no console or failed-request errors; complete GUI mutation workflow remains unverified |
 | 13 Reliability testing | Tested / Partially Verified | 44 backend tests and live Docker/Ollama scenarios passed; two historical model investigations and one pre-fix follow-up reassessment remain recorded as failed |
 | 14 Deployment | Tested / Partially Verified | Local Compose services are healthy and local/telemetry/production configurations validate; production secrets, TLS, authorization and PostgreSQL remain unimplemented |
+| 15 AI investigation reliability | In progress | Null-value and network-evidence guardrails; 30-case deterministic CI report; versioned live-Qwen evaluation with dataset hash and selected-case provenance. Local live-model comparison remains. |
 
 ## Continued runtime QA status
 

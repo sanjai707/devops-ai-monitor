@@ -304,3 +304,33 @@ Verification status for this phase:
 - The new checks are explicit deterministic guardrails for common operational
   claims, not a general-purpose semantic entailment model. Human review remains
   necessary.
+
+
+## Phase 15 — AI investigation reliability
+
+Implemented in the current feature branch:
+
+- Deterministic, source-aware evidence checks for OOM state, exit codes,
+  container runtime state, health status, restart counts, and CPU/memory
+  thresholds.
+- Null/missing state placeholder findings are omitted rather than presented as
+  confirmed observations.
+- Network failures are not inferred from network-byte counters or Docker
+  lifecycle events alone; an explicit diagnostic flag or matching collected
+  log entry is required.
+- The operator-action validator safely handles both scalar results such as
+  `"succeeded"` and structured Docker follow-up result objects.
+- The curated dataset contains 30 deterministic cases (v3.0.0), and the
+  regression suite enforces all 30.
+
+Latest GitHub Actions run for commit `87518b9` passed both backend/Compose and
+frontend/browser jobs. The deterministic validator report recorded 30/30
+fixture cases passed, a 93.1% valid evidence-reference rate, and a 14.29%
+unsupported-finding rate. These are metrics for the explicit deterministic
+guardrails only; they are not general natural-language entailment or model
+accuracy scores. Root-cause accuracy remains unscored because the dataset does
+not contain independently adjudicated labels.
+
+A fresh 30-case live Qwen run has not yet been performed. The prior five-case
+Qwen report remains a historical run against dataset v2.0.0 and should not be
+compared directly with v3.0.0 results.

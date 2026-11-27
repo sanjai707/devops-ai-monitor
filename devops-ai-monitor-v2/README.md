@@ -75,6 +75,17 @@ frontend type-check/build, and core, telemetry and production Compose
 configuration validation. The count is a point-in-time result; use the command
 above for the current suite.
 
+Run the deterministic 30-case evidence-validator evaluation without Ollama:
+`python scripts/evaluate_validator.py --output reports/deterministic-evaluation.json`
+
+Run the eligible curated cases against local Qwen and save a separate live-model
+report:
+`python scripts/evaluate_ollama.py --model qwen2.5:3b --max-cases 30 --prompt-version evidence-grounded-v2 --output reports/ollama-evaluation-v3.json`
+
+Reports include the fixture dataset SHA-256 and prompt version. Model execution
+completion is not root-cause accuracy; that remains unscored pending independent
+ground-truth labels.
+
 ```powershell
 Invoke-RestMethod http://127.0.0.1:8000/health
 Invoke-RestMethod http://127.0.0.1:8000/containers | Format-Table id,name,image,status

@@ -51,7 +51,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: deterministic-validator-evaluation
-          path: reports/deterministic-evaluation.json
+          path: devops-ai-monitor-v2/reports/deterministic-evaluation.json
           if-no-files-found: warn
           retention-days: 7
 
