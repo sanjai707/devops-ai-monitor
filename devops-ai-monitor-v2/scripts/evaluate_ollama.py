@@ -1,7 +1,7 @@
 """Run actual local Ollama investigations against curated evidence fixtures.
 
 Example:
-    python scripts/evaluate_ollama.py --model qwen2.5:3b --max-cases 5
+    python scripts/evaluate_ollama.py --model qwen2.5:3b --max-cases 30
 """
 import argparse
 import json
@@ -25,8 +25,8 @@ def main():
     parser.add_argument("--output", default="", help="Optional JSON report file path.")
     args = parser.parse_args()
 
-    if args.max_cases < 1 or args.max_cases > 12:
-        parser.error("--max-cases must be between 1 and 12")
+    if args.max_cases < 1 or args.max_cases > 30:
+        parser.error("--max-cases must be between 1 and 30")
 
     investigator = IncidentInvestigator(None, args.url, args.model)
     report = run_live_model_evaluation(

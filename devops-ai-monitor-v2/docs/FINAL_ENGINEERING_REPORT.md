@@ -44,7 +44,7 @@ Existing backend and dashboard modules were extended rather than replaced.
 
 ## Database changes
 
-SQLite schema version reached 6. Additive tables include:
+SQLite currently uses schema version 8. Additive tables introduced across the migration history include:
 
 - `docker_events`
 - `metric_samples`
@@ -194,6 +194,11 @@ unsupported-claim or calibration rate is asserted.
 
 ## Known limitations
 
+- Evidence-reference validation is not a general semantic entailment system.
+- Real-model inference completion does not establish root-cause accuracy.
+- Local Docker socket access remains a privileged host capability despite read-only mounts.
+- Full dashboard mutation workflows and production security controls remain incomplete.
+
 ## Independent quality audit findings
 
 ## Phase A/B/C runtime audit
@@ -227,8 +232,9 @@ VERIFIED real-model:
 - Investigation 22 was queued during Ollama outage and completed after recovery.
 
 FAILED / defect status:
-- No reproducible application defect was found in the Docker/Ollama recovery,
-  persistence or browser checks.
+- No unresolved application defect remained in the Docker/Ollama recovery,
+  persistence or browser checks after the separately recorded follow-up defect
+  was reproduced and fixed.
 - The plain shell `curl` 422 encountered during QA was a malformed PowerShell
   request body, not a backend defect; the valid `Invoke-RestMethod` call passed.
 - Local Compose has `API_KEY=""`, so optional API-key middleware is disabled for
@@ -266,3 +272,35 @@ BLOCKED:
 - Ollama is optional external infrastructure and unavailable behavior is handled but external model accuracy cannot be guaranteed.
 - Browser tests were local and were not a security or production-readiness assessment.
 - PostgreSQL migration guidance is not implemented.
+
+
+## Phase 15 implementation — 2026-11-27
+
+Implemented on `improve/incident-evaluation-reliability` after commit
+`ceb371b88e89469f5562f3d973e330896df8c364`:
+
+- Added source-aware claim checks for OOM indicators, exit-code values, runtime
+  state, Docker health state, CPU/memory threshold claims, restart-loop claims
+  and operator-intent assertions.
+- Contradictory evidence downgrades confirmed/probable claims. Typed claims
+  without a relevant observed value are not retained as confirmed facts.
+- OOMKilled=false conflicts with a positive OOM claim. OOMKilled=true or a
+  Docker OOM event supports a Docker-observed OOM finding; exit code 137 or
+  high memory utilization alone is insufficient.
+- Corrected the deterministic exit-137 inspection fact so a missing container
+  state is not rendered as the literal `None`.
+- Expanded deterministic evaluation fixtures from 12 to 30. Added per-case
+  review criteria for human review.
+- Corrected evaluation metrics to measure raw references and findings before
+  validation filtering, including unsupported/omitted/downgraded finding counts.
+  These are validator metrics, not root-cause accuracy.
+- Extended the real-model evaluation runner to accept up to 30 cases; the
+  default remains five to keep local runs manageable.
+
+Verification status for this phase:
+- Deterministic fixture suite and regression tests are included in CI.
+- The 30-case real-model run has **not** been executed in this implementation
+  commit. It requires the user's local Ollama runtime.
+- The new checks are explicit deterministic guardrails for common operational
+  claims, not a general-purpose semantic entailment model. Human review remains
+  necessary.
