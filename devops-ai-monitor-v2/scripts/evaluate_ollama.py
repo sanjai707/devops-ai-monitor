@@ -12,7 +12,7 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from ai_investigator import IncidentInvestigator
+from ai_investigator import INVESTIGATION_PROMPT_VERSION, IncidentInvestigator
 from evaluation import run_live_model_evaluation
 
 
@@ -20,8 +20,10 @@ def main():
     parser = argparse.ArgumentParser(description="Evaluate real Ollama responses for human review.")
     parser.add_argument("--url", default=os.getenv("OLLAMA_URL", "http://127.0.0.1:11434"))
     parser.add_argument("--model", default=os.getenv("OLLAMA_MODEL", "qwen2.5:3b"))
-    parser.add_argument("--max-cases", type=int, default=5)
+    parser.add_argument("--max-cases", type=int, default=30)
     parser.add_argument("--case-ids", default="", help="Comma-separated case IDs to run.")
+    parser.add_argument("--run-name", default="local-ollama-review")
+    parser.add_argument("--prompt-version", default=INVESTIGATION_PROMPT_VERSION)
     parser.add_argument("--output", default="", help="Optional JSON report file path.")
     args = parser.parse_args()
 
@@ -33,6 +35,8 @@ def main():
         investigator,
         case_ids=[item.strip() for item in args.case_ids.split(",") if item.strip()] or None,
         max_cases=args.max_cases,
+        run_name=args.run_name,
+        prompt_version=args.prompt_version,
     )
     rendered = json.dumps(report, indent=2, ensure_ascii=False)
     print(rendered)

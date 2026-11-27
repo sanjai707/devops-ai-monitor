@@ -1,21 +1,32 @@
+import hashlib
 import json
+import os
 from copy import deepcopy
 from datetime import datetime, timezone
 from pathlib import Path
 
-from ai_investigator import IncidentInvestigator, InvestigationError, redact_log_secrets
+from ai_investigator import (
+    INVESTIGATION_PROMPT_VERSION,
+    IncidentInvestigator,
+    InvestigationError,
+    redact_log_secrets,
+)
 
 
 DATASET_PATH = Path(__file__).parent / "evaluation" / "evaluation_cases.json"
 
 
-def run_evaluation(investigator, run_name="baseline", prompt_version="evidence-grounded-v1"):
-    dataset = json.loads(DATASET_PATH.read_text(encoding="utf-8"))
+def run_evaluation(
+    investigator,
+    run_name="deterministic-validator",
+    prompt_version=INVESTIGATION_PROMPT_VERSION,
+):
+    dataset_bytes = DATASET_PATH.read_bytes()
+    dataset = json.loads(dataset_bytes)
+    dataset_sha256 = hashlib.sha256(dataset_bytes).hexdigest()
     results = []
     passed = 0
-    started_at = __import__("datetime").datetime.now(
-        __import__("datetime").timezone.utc
-    ).strftime("%Y-%m-%dT%H:%M:%SZ")
+    started_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
     for case in dataset["cases"]:
         result = {
@@ -147,6 +158,12 @@ def run_evaluation(investigator, run_name="baseline", prompt_version="evidence-g
         "prompt_version": prompt_version,
         "model_name": investigator.model_name,
         "dataset_version": dataset["dataset_version"],
+        "dataset_sha256": dataset_sha256,
+        "git_revision": os.getenv("GITHUB_SHA") or os.getenv("DEVOPS_AI_MONITOR_REVISION"),
+        "scoring_scope": (
+            "Enumerated deterministic validator guardrails only; this is not general "
+            "natural-language entailment, model accuracy, or confidence calibration."
+        ),
         "started_at": started_at,
         "total": len(results),
         "passed": passed,
@@ -194,14 +211,20 @@ def run_evaluation(investigator, run_name="baseline", prompt_version="evidence-g
     }
 
 def run_live_model_evaluation(
-    investigator, case_ids=None, max_cases=5, run_name="local-ollama-review"
+    investigator,
+    case_ids=None,
+    max_cases=30,
+    run_name="local-ollama-review",
+    prompt_version=INVESTIGATION_PROMPT_VERSION,
 ):
     """Run real model inference on curated evidence fixtures for human review.
 
     This intentionally does not compute root-cause accuracy: the current fixtures
     do not contain independently adjudicated root-cause labels.
     """
-    dataset = json.loads(DATASET_PATH.read_text(encoding="utf-8"))
+    dataset_bytes = DATASET_PATH.read_bytes()
+    dataset = json.loads(dataset_bytes)
+    dataset_sha256 = hashlib.sha256(dataset_bytes).hexdigest()
     selected = [
         case for case in dataset["cases"]
         if not case.get("expect", {}).get("must_reject")
@@ -307,7 +330,11 @@ def run_live_model_evaluation(
         "run_name": run_name,
         "evaluation_mode": "real_model_inference_human_review",
         "model_name": investigator.model_name,
+        "prompt_version": prompt_version,
         "dataset_version": dataset["dataset_version"],
+        "dataset_sha256": dataset_sha256,
+        "git_revision": os.getenv("GITHUB_SHA") or os.getenv("DEVOPS_AI_MONITOR_REVISION"),
+        "selected_case_ids": [case["id"] for case in selected],
         "started_at": started_at,
         "completed_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "selected_cases": len(selected),

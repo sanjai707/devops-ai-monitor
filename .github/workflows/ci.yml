@@ -43,6 +43,18 @@ jobs:
       - name: Run backend regression suite
         run: python -m unittest discover -s tests -p "test_*.py" -v
 
+      - name: Generate deterministic validator evaluation
+        run: python scripts/evaluate_validator.py --output reports/deterministic-evaluation.json
+
+      - name: Upload deterministic validator report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: deterministic-validator-evaluation
+          path: reports/deterministic-evaluation.json
+          if-no-files-found: warn
+          retention-days: 7
+
       - name: Validate normal Compose configuration
         run: docker compose config --quiet
 

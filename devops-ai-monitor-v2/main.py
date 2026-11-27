@@ -11,7 +11,12 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from starlette.responses import JSONResponse
 
-from ai_investigator import IncidentInvestigator, redact_log_secrets, redact_structured_data
+from ai_investigator import (
+    INVESTIGATION_PROMPT_VERSION,
+    IncidentInvestigator,
+    redact_log_secrets,
+    redact_structured_data,
+)
 from database import IncidentDatabase
 from docker_event_collector import DockerEventCollector
 from incident_manager import IncidentManager
@@ -262,7 +267,7 @@ class InvestigationFeedbackRequest(BaseModel):
     original_query: str = Field(default="", max_length=5000)
     model_response: dict = Field(default_factory=dict)
     model_version: str = Field(default=OLLAMA_MODEL, max_length=100)
-    prompt_version: str = Field(default="evidence-grounded-v1", max_length=100)
+    prompt_version: str = Field(default=INVESTIGATION_PROMPT_VERSION, max_length=100)
     retrieved_knowledge_ids: list[int] = Field(default_factory=list)
     feedback_type: Literal[
         "helpful",
@@ -843,7 +848,7 @@ def run_evaluation_suite():
     report = run_evaluation(
         incident_investigator,
         run_name="deterministic-evidence-regression",
-        prompt_version="evidence-grounded-v1",
+        prompt_version=INVESTIGATION_PROMPT_VERSION,
     )
     return incident_database.store_evaluation_run(report)
 
