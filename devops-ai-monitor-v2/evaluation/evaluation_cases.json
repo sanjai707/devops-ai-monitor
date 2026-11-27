@@ -1,5 +1,5 @@
 {
-  "dataset_version": "2.0.0",
+  "dataset_version": "3.0.0",
   "cases": [
     {
       "id": "exit137-oom-false",
@@ -18,7 +18,9 @@
           {
             "claim": "Exit code 137 is consistent with SIGKILL",
             "classification": "hypothesis",
-            "supporting_evidence_ids": ["INS-001"],
+            "supporting_evidence_ids": [
+              "INS-001"
+            ],
             "contradictory_evidence_ids": []
           }
         ],
@@ -28,196 +30,1125 @@
         "confidence_explanation": ""
       },
       "evidence_inventory": [
-        {"id":"INS-001","source_type":"inspection","status":"collected","payload":{"exit_code":137,"oom_killed":false}}
+        {
+          "id": "INS-001",
+          "source_type": "inspection",
+          "status": "collected",
+          "payload": {
+            "exit_code": 137,
+            "oom_killed": false
+          }
+        }
       ],
-      "expect": {"confidence":"low","root_cause_insufficient":true}
+      "expect": {
+        "confidence": "low",
+        "root_cause_insufficient": true
+      },
+      "review_criteria": [
+        "Treat exit code 137 as SIGKILL-compatible, not proof of OOM or initiator."
+      ]
     },
     {
       "id": "unknown-evidence-id",
       "model_output": {
-        "summary":"Unsupported claim",
-        "root_cause":"Network failure",
-        "confidence":"high",
-        "confirmed_facts":["Network failure occurred"],
-        "hypotheses":[],
-        "evidence":[],
-        "missing_information":[],
-        "recommended_checks":[],
-        "suggested_remediation":[],
-        "requires_human_approval":true,
-        "findings":[
+        "summary": "Unsupported claim",
+        "root_cause": "Network failure",
+        "confidence": "high",
+        "confirmed_facts": [
+          "Network failure occurred"
+        ],
+        "hypotheses": [],
+        "evidence": [],
+        "missing_information": [],
+        "recommended_checks": [],
+        "suggested_remediation": [],
+        "requires_human_approval": true,
+        "findings": [
           {
-            "claim":"Network failure occurred",
-            "classification":"confirmed_fact",
-            "supporting_evidence_ids":["UNKNOWN-1"],
-            "contradictory_evidence_ids":[]
+            "claim": "Network failure occurred",
+            "classification": "confirmed_fact",
+            "supporting_evidence_ids": [
+              "UNKNOWN-1"
+            ],
+            "contradictory_evidence_ids": []
           }
         ],
-        "contradictory_evidence":[],
-        "what_happened":"",
-        "what_changed":"",
-        "confidence_explanation":"",
-        "read_only_checks":[],
-        "corrective_actions":[]
+        "contradictory_evidence": [],
+        "what_happened": "",
+        "what_changed": "",
+        "confidence_explanation": "",
+        "read_only_checks": [],
+        "corrective_actions": []
       },
-      "evidence_inventory":[
-        {"id":"MET-001","source_type":"metric","status":"collected","payload":{"cpu_percent":10,"memory_percent":20}}
+      "evidence_inventory": [
+        {
+          "id": "MET-001",
+          "source_type": "metric",
+          "status": "collected",
+          "payload": {
+            "cpu_percent": 10,
+            "memory_percent": 20
+          }
+        }
       ],
-      "expect":{"confidence":"low","unsupported_claim_removed":true}
+      "expect": {
+        "confidence": "low",
+        "unsupported_claim_removed": true
+      },
+      "review_criteria": [
+        "Do not retain a factual claim when it cites an unknown evidence ID."
+      ]
     },
     {
       "id": "oom-contradiction",
       "model_output": {
-        "root_cause":"OOM killed",
-        "summary":"Container likely OOM killed",
-        "confidence":"high",
-        "findings":[
+        "root_cause": "OOM killed",
+        "summary": "Container likely OOM killed",
+        "confidence": "high",
+        "findings": [
           {
-            "claim":"Container was killed by OOM",
-            "classification":"probable_explanation",
-            "supporting_evidence_ids":["INS-001"],
-            "contradictory_evidence_ids":[]
+            "claim": "Container was killed by OOM",
+            "classification": "probable_explanation",
+            "supporting_evidence_ids": [
+              "INS-001"
+            ],
+            "contradictory_evidence_ids": []
           }
         ],
-        "contradictory_evidence":[],
-        "requires_human_approval":true
+        "contradictory_evidence": [],
+        "requires_human_approval": true
       },
-      "evidence_inventory":[
-        {"id":"INS-001","source_type":"inspection","status":"collected","payload":{"exit_code":137,"oom_killed":false}}
+      "evidence_inventory": [
+        {
+          "id": "INS-001",
+          "source_type": "inspection",
+          "status": "collected",
+          "payload": {
+            "exit_code": 137,
+            "oom_killed": false
+          }
+        }
       ],
-      "expect":{"confidence":"low","classification_not_confirmed":true}
+      "expect": {
+        "confidence": "low",
+        "classification_not_confirmed": true
+      },
+      "review_criteria": [
+        "OOMKilled=false must prevent a confirmed OOM claim."
+      ]
     },
     {
-      "id":"verified-root-cause",
-      "model_output":{
-        "root_cause":"Container exceeded the configured memory limit",
-        "summary":"OOM evidence correlates with exit 137",
-        "confidence":"high",
-        "findings":[
-          {"claim":"The container was OOM killed","classification":"confirmed_fact","supporting_evidence_ids":["INS-001","EVT-001"],"contradictory_evidence_ids":[]}
+      "id": "verified-root-cause",
+      "model_output": {
+        "root_cause": "Container exceeded the configured memory limit",
+        "summary": "OOM evidence correlates with exit 137",
+        "confidence": "high",
+        "findings": [
+          {
+            "claim": "The container was OOM killed",
+            "classification": "confirmed_fact",
+            "supporting_evidence_ids": [
+              "INS-001",
+              "EVT-001"
+            ],
+            "contradictory_evidence_ids": []
+          }
         ]
       },
-      "evidence_inventory":[
-        {"id":"INS-001","source_type":"inspection","status":"collected","payload":{"exit_code":137,"oom_killed":true}},
-        {"id":"EVT-001","source_type":"docker_event","status":"collected","payload":{"action":"oom","attributes":{"exitCode":"137"}}}
+      "evidence_inventory": [
+        {
+          "id": "INS-001",
+          "source_type": "inspection",
+          "status": "collected",
+          "payload": {
+            "exit_code": 137,
+            "oom_killed": true
+          }
+        },
+        {
+          "id": "EVT-001",
+          "source_type": "docker_event",
+          "status": "collected",
+          "payload": {
+            "action": "oom",
+            "attributes": {
+              "exitCode": "137"
+            }
+          }
+        }
       ],
-      "expect":{"confidence":"medium","classification_confirmed":true}
+      "expect": {
+        "confidence": "medium",
+        "classification_confirmed": true
+      },
+      "review_criteria": [
+        "OOMKilled=true and an OOM event support a Docker-observed OOM-kill finding."
+      ]
     },
     {
-      "id":"operator-controlled-stop",
-      "model_output":{
-        "root_cause":"Operator stopped the container",
-        "summary":"Explicit operator annotation",
-        "confidence":"medium",
-        "findings":[
-          {"claim":"The container was stopped by a controlled test","classification":"confirmed_fact","supporting_evidence_ids":["ACT-001"],"contradictory_evidence_ids":[]}
+      "id": "operator-controlled-stop",
+      "model_output": {
+        "root_cause": "Operator stopped the container",
+        "summary": "Explicit operator annotation",
+        "confidence": "medium",
+        "findings": [
+          {
+            "claim": "The container was stopped by a controlled test",
+            "classification": "confirmed_fact",
+            "supporting_evidence_ids": [
+              "ACT-001"
+            ],
+            "contradictory_evidence_ids": []
+          }
         ]
       },
-      "evidence_inventory":[
-        {"id":"ACT-001","source_type":"operator_action","status":"collected","payload":{"action":"stop","result":"succeeded","source":"test_harness","context":"Controlled test stop"}}
+      "evidence_inventory": [
+        {
+          "id": "ACT-001",
+          "source_type": "operator_action",
+          "status": "collected",
+          "payload": {
+            "action": "stop",
+            "result": "succeeded",
+            "source": "test_harness",
+            "context": "Controlled test stop"
+          }
+        }
       ],
-      "expect":{"confidence":"low","classification_confirmed":true}
+      "expect": {
+        "confidence": "low",
+        "classification_probable": true
+      },
+      "review_criteria": [
+        "Treat operator/test annotations as supplied context, not independent proof."
+      ]
     },
     {
-      "id":"missing-historical-metrics",
-      "model_output":{
-        "root_cause":"Insufficient evidence to determine the root cause.",
-        "summary":"Metrics unavailable",
-        "confidence":"low",
-        "findings":[
-          {"claim":"No historical CPU samples were collected","classification":"confirmed_fact","supporting_evidence_ids":[],"contradictory_evidence_ids":[]}
+      "id": "missing-historical-metrics",
+      "model_output": {
+        "root_cause": "Insufficient evidence to determine the root cause.",
+        "summary": "Metrics unavailable",
+        "confidence": "low",
+        "findings": [
+          {
+            "claim": "No historical CPU samples were collected",
+            "classification": "confirmed_fact",
+            "supporting_evidence_ids": [],
+            "contradictory_evidence_ids": []
+          }
         ]
       },
-      "evidence_inventory":[
-        {"id":"MET-001","source_type":"metric","status":"unavailable","payload":{}}
+      "evidence_inventory": [
+        {
+          "id": "MET-001",
+          "source_type": "metric",
+          "status": "unavailable",
+          "payload": {}
+        }
       ],
-      "expect":{"confidence":"low","root_cause_insufficient":true}
+      "expect": {
+        "confidence": "low",
+        "root_cause_insufficient": true
+      },
+      "review_criteria": [
+        "Unavailable metrics cannot prove a runtime condition."
+      ]
     },
     {
-      "id":"contradictory-docker-annotations",
-      "model_output":{
-        "root_cause":"Operator action contradicts an OOM claim",
-        "summary":"Annotations conflict",
-        "confidence":"low",
-        "findings":[
-          {"claim":"An operator stop occurred","classification":"confirmed_fact","supporting_evidence_ids":["ACT-001"],"contradictory_evidence_ids":["INS-001"]}
+      "id": "contradictory-docker-annotations",
+      "model_output": {
+        "root_cause": "Operator action contradicts an OOM claim",
+        "summary": "Annotations conflict",
+        "confidence": "low",
+        "findings": [
+          {
+            "claim": "An operator stop occurred",
+            "classification": "confirmed_fact",
+            "supporting_evidence_ids": [
+              "ACT-001"
+            ],
+            "contradictory_evidence_ids": [
+              "INS-001"
+            ]
+          }
         ]
       },
-      "evidence_inventory":[
-        {"id":"ACT-001","source_type":"operator_action","status":"collected","payload":{"action":"stop","result":"succeeded"}},
-        {"id":"INS-001","source_type":"inspection","status":"collected","payload":{"exit_code":137,"oom_killed":true}}
+      "evidence_inventory": [
+        {
+          "id": "ACT-001",
+          "source_type": "operator_action",
+          "status": "collected",
+          "payload": {
+            "action": "stop",
+            "result": "succeeded"
+          }
+        },
+        {
+          "id": "INS-001",
+          "source_type": "inspection",
+          "status": "collected",
+          "payload": {
+            "exit_code": 137,
+            "oom_killed": true
+          }
+        }
       ],
-      "expect":{"confidence":"low","contradiction_present":true}
+      "expect": {
+        "confidence": "low",
+        "contradiction_present": true
+      },
+      "review_criteria": [
+        "Preserve contradictions; do not promote a conflicting claim to confirmed fact."
+      ]
     },
     {
-      "id":"irrelevant-knowledge",
-      "model_output":{
-        "root_cause":"Insufficient evidence to determine the root cause.",
-        "summary":"Retrieved runbook was not infrastructure evidence",
-        "confidence":"low",
-        "findings":[
-          {"claim":"Restart policy is documented","classification":"confirmed_fact","supporting_evidence_ids":["KNO-001"],"contradictory_evidence_ids":[]}
+      "id": "irrelevant-knowledge",
+      "model_output": {
+        "root_cause": "Insufficient evidence to determine the root cause.",
+        "summary": "Retrieved runbook was not infrastructure evidence",
+        "confidence": "low",
+        "findings": [
+          {
+            "claim": "Restart policy is documented",
+            "classification": "confirmed_fact",
+            "supporting_evidence_ids": [
+              "KNO-001"
+            ],
+            "contradictory_evidence_ids": []
+          }
         ]
       },
-      "evidence_inventory":[
-        {"id":"KNO-001","source_type":"knowledge","status":"collected","payload":{"title":"Restart runbook","content":"Documented restart procedure"}}
+      "evidence_inventory": [
+        {
+          "id": "KNO-001",
+          "source_type": "knowledge",
+          "status": "collected",
+          "payload": {
+            "title": "Restart runbook",
+            "content": "Documented restart procedure"
+          }
+        }
       ],
-      "expect":{"confidence":"low","unsupported_claim_removed":true}
+      "expect": {
+        "confidence": "low",
+        "unsupported_claim_removed": true
+      },
+      "review_criteria": [
+        "Knowledge documents do not establish current infrastructure state."
+      ]
     },
     {
-      "id":"incorrect-network-recommendation",
-      "model_output":{
-        "root_cause":"Insufficient evidence to determine the root cause.",
-        "summary":"No network evidence",
-        "confidence":"low",
-        "read_only_checks":[
-          {"description":"Restart the container","reason":"Assume network recovery","evidence_ids":["NOT-REAL"],"expected_impact":"Unknown","risk_level":"high","required_approval":true,"verification_steps":["Check status"],"rollback_considerations":"Stop and restore prior state"}
+      "id": "incorrect-network-recommendation",
+      "model_output": {
+        "root_cause": "Insufficient evidence to determine the root cause.",
+        "summary": "No network evidence",
+        "confidence": "low",
+        "read_only_checks": [
+          {
+            "description": "Restart the container",
+            "reason": "Assume network recovery",
+            "evidence_ids": [
+              "NOT-REAL"
+            ],
+            "expected_impact": "Unknown",
+            "risk_level": "high",
+            "required_approval": true,
+            "verification_steps": [
+              "Check status"
+            ],
+            "rollback_considerations": "Stop and restore prior state"
+          }
         ],
-        "findings":[]
+        "findings": []
       },
-      "evidence_inventory":[
-        {"id":"MET-001","source_type":"metric","status":"collected","payload":{"cpu_percent":10}}
+      "evidence_inventory": [
+        {
+          "id": "MET-001",
+          "source_type": "metric",
+          "status": "collected",
+          "payload": {
+            "cpu_percent": 10
+          }
+        }
       ],
-      "expect":{"recommendation_removed":true,"confidence":"low"}
+      "expect": {
+        "recommendation_removed": true,
+        "confidence": "low"
+      },
+      "review_criteria": [
+        "Reject follow-up actions outside the explicit safe allowlist."
+      ]
     },
     {
-      "id":"docker-event-correlation",
-      "model_output":{
-        "root_cause":"Container exit correlated with a die event",
-        "summary":"Docker event and inspection correlate",
-        "confidence":"medium",
-        "findings":[
-          {"claim":"The container stopped with exit 137","classification":"probable_explanation","supporting_evidence_ids":["EVT-001","INS-001"],"contradictory_evidence_ids":[]}
+      "id": "docker-event-correlation",
+      "model_output": {
+        "root_cause": "Container exit correlated with a die event",
+        "summary": "Docker event and inspection correlate",
+        "confidence": "medium",
+        "findings": [
+          {
+            "claim": "The container stopped with exit 137",
+            "classification": "probable_explanation",
+            "supporting_evidence_ids": [
+              "EVT-001",
+              "INS-001"
+            ],
+            "contradictory_evidence_ids": []
+          }
         ]
       },
-      "evidence_inventory":[
-        {"id":"EVT-001","source_type":"docker_event","status":"collected","payload":{"action":"die","attributes":{"exitCode":"137"}}},
-        {"id":"INS-001","source_type":"inspection","status":"collected","payload":{"exit_code":137,"oom_killed":false}}
+      "evidence_inventory": [
+        {
+          "id": "EVT-001",
+          "source_type": "docker_event",
+          "status": "collected",
+          "payload": {
+            "action": "die",
+            "attributes": {
+              "exitCode": "137"
+            }
+          }
+        },
+        {
+          "id": "INS-001",
+          "source_type": "inspection",
+          "status": "collected",
+          "payload": {
+            "exit_code": 137,
+            "oom_killed": false
+          }
+        }
       ],
-      "expect":{"confidence":"low","classification_not_confirmed":true}
+      "expect": {
+        "confidence": "low",
+        "classification_not_confirmed": true
+      },
+      "review_criteria": [
+        "A die event and exit code do not establish the initiator or root cause."
+      ]
     },
     {
-      "id":"oom-with-verification",
-      "model_output":{
-        "root_cause":"OOM killed",
-        "summary":"OOM confirmed",
-        "confidence":"high",
-        "findings":[
-          {"claim":"OOMKilled is true","classification":"confirmed_fact","supporting_evidence_ids":["INS-001"],"contradictory_evidence_ids":[]}
+      "id": "oom-with-verification",
+      "model_output": {
+        "root_cause": "OOM killed",
+        "summary": "OOM confirmed",
+        "confidence": "high",
+        "findings": [
+          {
+            "claim": "OOMKilled is true",
+            "classification": "confirmed_fact",
+            "supporting_evidence_ids": [
+              "INS-001"
+            ],
+            "contradictory_evidence_ids": []
+          }
         ]
       },
-      "evidence_inventory":[
-        {"id":"INS-001","source_type":"inspection","status":"collected","payload":{"exit_code":137,"oom_killed":true}}
+      "evidence_inventory": [
+        {
+          "id": "INS-001",
+          "source_type": "inspection",
+          "status": "collected",
+          "payload": {
+            "exit_code": 137,
+            "oom_killed": true
+          }
+        }
       ],
-      "expect":{"confidence":"low","classification_confirmed":true}
+      "expect": {
+        "confidence": "low",
+        "classification_confirmed": true
+      },
+      "review_criteria": [
+        "OOMKilled=true supports a confirmed Docker-observed OOM flag."
+      ]
     },
     {
       "id": "malformed-output",
-      "model_output":{"root_cause":42,"confidence":"high"},
-      "evidence_inventory":[
-        {"id":"INS-001","source_type":"inspection","status":"collected","payload":{"exit_code":137,"oom_killed":false}}
+      "model_output": {
+        "root_cause": 42,
+        "confidence": "high"
+      },
+      "evidence_inventory": [
+        {
+          "id": "INS-001",
+          "source_type": "inspection",
+          "status": "collected",
+          "payload": {
+            "exit_code": 137,
+            "oom_killed": false
+          }
+        }
       ],
-      "expect":{"must_reject":true}
+      "expect": {
+        "must_reject": true
+      },
+      "review_criteria": [
+        "Reject malformed model output rather than silently coercing types."
+      ]
+    },
+    {
+      "id": "oom-conflicting-inspection-and-event",
+      "model_output": {
+        "summary": "Evaluation fixture: oom-conflicting-inspection-and-event",
+        "root_cause": "Insufficient evidence to determine the root cause.",
+        "confidence": "high",
+        "findings": [
+          {
+            "claim": "The container was OOM-killed.",
+            "classification": "confirmed_fact",
+            "supporting_evidence_ids": [
+              "INS-001",
+              "EVT-001"
+            ],
+            "contradictory_evidence_ids": []
+          }
+        ]
+      },
+      "evidence_inventory": [
+        {
+          "id": "INS-001",
+          "source_type": "inspection",
+          "status": "collected",
+          "payload": {
+            "exit_code": 137,
+            "oom_killed": false
+          }
+        },
+        {
+          "id": "EVT-001",
+          "source_type": "docker_event",
+          "status": "collected",
+          "payload": {
+            "action": "oom",
+            "attributes": {
+              "exitCode": "137"
+            }
+          }
+        }
+      ],
+      "expect": {
+        "confidence": "low",
+        "classification_not_confirmed": true,
+        "contradiction_present": true
+      },
+      "review_criteria": [
+        "An explicit OOMKilled=false conflicts with a positive OOM claim even if another source reports an OOM event.",
+        "Keep the conflict visible and do not call the cause confirmed."
+      ]
+    },
+    {
+      "id": "oom-high-memory-is-not-oom-proof",
+      "model_output": {
+        "summary": "Evaluation fixture: oom-high-memory-is-not-oom-proof",
+        "root_cause": "Insufficient evidence to determine the root cause.",
+        "confidence": "high",
+        "findings": [
+          {
+            "claim": "The container was OOM-killed.",
+            "classification": "confirmed_fact",
+            "supporting_evidence_ids": [
+              "MET-001"
+            ],
+            "contradictory_evidence_ids": []
+          }
+        ]
+      },
+      "evidence_inventory": [
+        {
+          "id": "MET-001",
+          "source_type": "metric",
+          "status": "collected",
+          "payload": {
+            "memory_percent": 97
+          }
+        }
+      ],
+      "expect": {
+        "confidence": "low",
+        "classification_not_confirmed": true
+      },
+      "review_criteria": [
+        "High memory utilization is not proof that Docker killed the container for OOM."
+      ]
+    },
+    {
+      "id": "exit-code-mismatch",
+      "model_output": {
+        "summary": "Evaluation fixture: exit-code-mismatch",
+        "root_cause": "Insufficient evidence to determine the root cause.",
+        "confidence": "high",
+        "findings": [
+          {
+            "claim": "The container exited with code 137.",
+            "classification": "confirmed_fact",
+            "supporting_evidence_ids": [
+              "INS-001"
+            ],
+            "contradictory_evidence_ids": []
+          }
+        ]
+      },
+      "evidence_inventory": [
+        {
+          "id": "INS-001",
+          "source_type": "inspection",
+          "status": "collected",
+          "payload": {
+            "status": "exited",
+            "exit_code": 143,
+            "oom_killed": false
+          }
+        }
+      ],
+      "expect": {
+        "confidence": "low",
+        "classification_not_confirmed": true,
+        "contradiction_present": true
+      },
+      "review_criteria": [
+        "Do not accept an exit code that differs from the cited inspection."
+      ]
+    },
+    {
+      "id": "exit-code-143-supported",
+      "model_output": {
+        "summary": "Evaluation fixture: exit-code-143-supported",
+        "root_cause": "Insufficient evidence to determine the root cause.",
+        "confidence": "high",
+        "findings": [
+          {
+            "claim": "The container exited with code 143.",
+            "classification": "confirmed_fact",
+            "supporting_evidence_ids": [
+              "INS-001"
+            ],
+            "contradictory_evidence_ids": []
+          }
+        ]
+      },
+      "evidence_inventory": [
+        {
+          "id": "INS-001",
+          "source_type": "inspection",
+          "status": "collected",
+          "payload": {
+            "status": "exited",
+            "exit_code": 143,
+            "oom_killed": false
+          }
+        }
+      ],
+      "expect": {
+        "confidence": "low",
+        "classification_confirmed": true
+      },
+      "review_criteria": [
+        "A matching exit code is a supported observation, but does not identify who sent SIGTERM."
+      ]
+    },
+    {
+      "id": "runtime-state-not-inferred-from-metrics",
+      "model_output": {
+        "summary": "Evaluation fixture: runtime-state-not-inferred-from-metrics",
+        "root_cause": "Insufficient evidence to determine the root cause.",
+        "confidence": "high",
+        "findings": [
+          {
+            "claim": "The container is running.",
+            "classification": "confirmed_fact",
+            "supporting_evidence_ids": [
+              "MET-001"
+            ],
+            "contradictory_evidence_ids": []
+          }
+        ]
+      },
+      "evidence_inventory": [
+        {
+          "id": "MET-001",
+          "source_type": "metric",
+          "status": "collected",
+          "payload": {
+            "cpu_percent": 12,
+            "memory_percent": 20
+          }
+        }
+      ],
+      "expect": {
+        "confidence": "low",
+        "classification_not_confirmed": true
+      },
+      "review_criteria": [
+        "CPU and memory metrics without a running/state field do not prove container runtime state."
+      ]
+    },
+    {
+      "id": "health-unhealthy-supported",
+      "model_output": {
+        "summary": "Evaluation fixture: health-unhealthy-supported",
+        "root_cause": "Insufficient evidence to determine the root cause.",
+        "confidence": "high",
+        "findings": [
+          {
+            "claim": "The container health status is unhealthy.",
+            "classification": "confirmed_fact",
+            "supporting_evidence_ids": [
+              "INS-001"
+            ],
+            "contradictory_evidence_ids": []
+          }
+        ]
+      },
+      "evidence_inventory": [
+        {
+          "id": "INS-001",
+          "source_type": "inspection",
+          "status": "collected",
+          "payload": {
+            "status": "running",
+            "health_status": "unhealthy"
+          }
+        }
+      ],
+      "expect": {
+        "confidence": "low",
+        "classification_confirmed": true
+      },
+      "review_criteria": [
+        "A health status finding must match Docker-reported health status."
+      ]
+    },
+    {
+      "id": "health-unhealthy-contradicted",
+      "model_output": {
+        "summary": "Evaluation fixture: health-unhealthy-contradicted",
+        "root_cause": "Insufficient evidence to determine the root cause.",
+        "confidence": "high",
+        "findings": [
+          {
+            "claim": "The container health status is unhealthy.",
+            "classification": "confirmed_fact",
+            "supporting_evidence_ids": [
+              "INS-001"
+            ],
+            "contradictory_evidence_ids": []
+          }
+        ]
+      },
+      "evidence_inventory": [
+        {
+          "id": "INS-001",
+          "source_type": "inspection",
+          "status": "collected",
+          "payload": {
+            "status": "running",
+            "health_status": "healthy"
+          }
+        }
+      ],
+      "expect": {
+        "confidence": "low",
+        "classification_not_confirmed": true,
+        "contradiction_present": true
+      },
+      "review_criteria": [
+        "Do not claim unhealthy when Docker reports healthy."
+      ]
+    },
+    {
+      "id": "restart-policy-does-not-prove-loop",
+      "model_output": {
+        "summary": "Evaluation fixture: restart-policy-does-not-prove-loop",
+        "root_cause": "Insufficient evidence to determine the root cause.",
+        "confidence": "high",
+        "findings": [
+          {
+            "claim": "The container entered a restart loop.",
+            "classification": "confirmed_fact",
+            "supporting_evidence_ids": [
+              "INS-001"
+            ],
+            "contradictory_evidence_ids": []
+          }
+        ]
+      },
+      "evidence_inventory": [
+        {
+          "id": "INS-001",
+          "source_type": "inspection",
+          "status": "collected",
+          "payload": {
+            "status": "running",
+            "restart_policy": "always"
+          }
+        }
+      ],
+      "expect": {
+        "confidence": "low",
+        "classification_not_confirmed": true
+      },
+      "review_criteria": [
+        "A restart policy does not show that restarts occurred."
+      ]
+    },
+    {
+      "id": "restart-count-supports-repeated-restarts",
+      "model_output": {
+        "summary": "Evaluation fixture: restart-count-supports-repeated-restarts",
+        "root_cause": "Insufficient evidence to determine the root cause.",
+        "confidence": "high",
+        "findings": [
+          {
+            "claim": "The container restarted repeatedly; Docker reports restart count 8.",
+            "classification": "confirmed_fact",
+            "supporting_evidence_ids": [
+              "INS-001"
+            ],
+            "contradictory_evidence_ids": []
+          }
+        ]
+      },
+      "evidence_inventory": [
+        {
+          "id": "INS-001",
+          "source_type": "inspection",
+          "status": "collected",
+          "payload": {
+            "status": "running",
+            "restart_count": 8
+          }
+        }
+      ],
+      "expect": {
+        "confidence": "low",
+        "classification_confirmed": true
+      },
+      "review_criteria": [
+        "Use observed restart count to support repeated-restart descriptions; avoid inferring the trigger."
+      ]
+    },
+    {
+      "id": "cpu-saturation-supported",
+      "model_output": {
+        "summary": "Evaluation fixture: cpu-saturation-supported",
+        "root_cause": "Insufficient evidence to determine the root cause.",
+        "confidence": "high",
+        "findings": [
+          {
+            "claim": "CPU utilization was saturated at 96%.",
+            "classification": "confirmed_fact",
+            "supporting_evidence_ids": [
+              "MET-001"
+            ],
+            "contradictory_evidence_ids": []
+          }
+        ]
+      },
+      "evidence_inventory": [
+        {
+          "id": "MET-001",
+          "source_type": "metric",
+          "status": "collected",
+          "payload": {
+            "cpu_percent": 96
+          }
+        }
+      ],
+      "expect": {
+        "confidence": "low",
+        "classification_confirmed": true
+      },
+      "review_criteria": [
+        "A high CPU claim should match the configured CPU warning threshold."
+      ]
+    },
+    {
+      "id": "cpu-saturation-contradicted",
+      "model_output": {
+        "summary": "Evaluation fixture: cpu-saturation-contradicted",
+        "root_cause": "Insufficient evidence to determine the root cause.",
+        "confidence": "high",
+        "findings": [
+          {
+            "claim": "CPU utilization was saturated.",
+            "classification": "confirmed_fact",
+            "supporting_evidence_ids": [
+              "MET-001"
+            ],
+            "contradictory_evidence_ids": []
+          }
+        ]
+      },
+      "evidence_inventory": [
+        {
+          "id": "MET-001",
+          "source_type": "metric",
+          "status": "collected",
+          "payload": {
+            "cpu_percent": 15
+          }
+        }
+      ],
+      "expect": {
+        "confidence": "low",
+        "classification_not_confirmed": true,
+        "contradiction_present": true
+      },
+      "review_criteria": [
+        "Low CPU utilization contradicts a CPU-saturation claim."
+      ]
+    },
+    {
+      "id": "memory-pressure-supported",
+      "model_output": {
+        "summary": "Evaluation fixture: memory-pressure-supported",
+        "root_cause": "Insufficient evidence to determine the root cause.",
+        "confidence": "high",
+        "findings": [
+          {
+            "claim": "Memory pressure was high at 92%.",
+            "classification": "confirmed_fact",
+            "supporting_evidence_ids": [
+              "MET-001"
+            ],
+            "contradictory_evidence_ids": []
+          }
+        ]
+      },
+      "evidence_inventory": [
+        {
+          "id": "MET-001",
+          "source_type": "metric",
+          "status": "collected",
+          "payload": {
+            "memory_percent": 92
+          }
+        }
+      ],
+      "expect": {
+        "confidence": "low",
+        "classification_confirmed": true
+      },
+      "review_criteria": [
+        "A high memory-pressure claim should match the configured memory warning threshold."
+      ]
+    },
+    {
+      "id": "memory-exhaustion-contradicted",
+      "model_output": {
+        "summary": "Evaluation fixture: memory-exhaustion-contradicted",
+        "root_cause": "Insufficient evidence to determine the root cause.",
+        "confidence": "high",
+        "findings": [
+          {
+            "claim": "Memory exhaustion occurred.",
+            "classification": "confirmed_fact",
+            "supporting_evidence_ids": [
+              "MET-001"
+            ],
+            "contradictory_evidence_ids": []
+          }
+        ]
+      },
+      "evidence_inventory": [
+        {
+          "id": "MET-001",
+          "source_type": "metric",
+          "status": "collected",
+          "payload": {
+            "memory_percent": 30
+          }
+        }
+      ],
+      "expect": {
+        "confidence": "low",
+        "classification_not_confirmed": true,
+        "contradiction_present": true
+      },
+      "review_criteria": [
+        "Low memory use contradicts a memory-exhaustion claim."
+      ]
+    },
+    {
+      "id": "docker-die-event-does-not-prove-operator-intent",
+      "model_output": {
+        "summary": "Evaluation fixture: docker-die-event-does-not-prove-operator-intent",
+        "root_cause": "Insufficient evidence to determine the root cause.",
+        "confidence": "high",
+        "findings": [
+          {
+            "claim": "An operator intentionally stopped the container.",
+            "classification": "confirmed_fact",
+            "supporting_evidence_ids": [
+              "EVT-001"
+            ],
+            "contradictory_evidence_ids": []
+          }
+        ]
+      },
+      "evidence_inventory": [
+        {
+          "id": "EVT-001",
+          "source_type": "docker_event",
+          "status": "collected",
+          "payload": {
+            "action": "die",
+            "attributes": {
+              "exitCode": "143"
+            }
+          }
+        }
+      ],
+      "expect": {
+        "confidence": "low",
+        "classification_not_confirmed": true
+      },
+      "review_criteria": [
+        "A Docker die event does not identify the initiator or intent."
+      ]
+    },
+    {
+      "id": "operator-annotation-remains-unverified",
+      "model_output": {
+        "summary": "Evaluation fixture: operator-annotation-remains-unverified",
+        "root_cause": "Insufficient evidence to determine the root cause.",
+        "confidence": "high",
+        "findings": [
+          {
+            "claim": "The operator intentionally stopped the container.",
+            "classification": "confirmed_fact",
+            "supporting_evidence_ids": [
+              "ACT-001"
+            ],
+            "contradictory_evidence_ids": []
+          }
+        ]
+      },
+      "evidence_inventory": [
+        {
+          "id": "ACT-001",
+          "source_type": "operator_action",
+          "status": "collected",
+          "payload": {
+            "action": "stop",
+            "result": "succeeded",
+            "source": "operator_annotation",
+            "context": "Controlled stop"
+          }
+        }
+      ],
+      "expect": {
+        "confidence": "low",
+        "classification_probable": true
+      },
+      "review_criteria": [
+        "Operator annotations are supplied context, not independently verified facts."
+      ]
+    },
+    {
+      "id": "knowledge-does-not-prove-running-state",
+      "model_output": {
+        "summary": "Evaluation fixture: knowledge-does-not-prove-running-state",
+        "root_cause": "Insufficient evidence to determine the root cause.",
+        "confidence": "high",
+        "findings": [
+          {
+            "claim": "The container is running.",
+            "classification": "confirmed_fact",
+            "supporting_evidence_ids": [
+              "KNO-001"
+            ],
+            "contradictory_evidence_ids": []
+          }
+        ]
+      },
+      "evidence_inventory": [
+        {
+          "id": "KNO-001",
+          "source_type": "knowledge",
+          "status": "collected",
+          "payload": {
+            "title": "Container status runbook",
+            "content": "Containers should remain running."
+          }
+        }
+      ],
+      "expect": {
+        "confidence": "low",
+        "classification_not_confirmed": true
+      },
+      "review_criteria": [
+        "Approved knowledge is supporting context, not live Docker state evidence."
+      ]
+    },
+    {
+      "id": "empty-evidence-reference-is-omitted",
+      "model_output": {
+        "summary": "Evaluation fixture: empty-evidence-reference-is-omitted",
+        "root_cause": "Insufficient evidence to determine the root cause.",
+        "confidence": "high",
+        "findings": [
+          {
+            "claim": "The container is running.",
+            "classification": "confirmed_fact",
+            "supporting_evidence_ids": [],
+            "contradictory_evidence_ids": []
+          }
+        ]
+      },
+      "evidence_inventory": [
+        {
+          "id": "INS-001",
+          "source_type": "inspection",
+          "status": "collected",
+          "payload": {
+            "status": "running"
+          }
+        }
+      ],
+      "expect": {
+        "confidence": "low",
+        "finding_omitted": "The container is running."
+      },
+      "review_criteria": [
+        "A finding without evidence references must not be presented as an observation."
+      ]
+    },
+    {
+      "id": "unavailable-evidence-cannot-support-finding",
+      "model_output": {
+        "summary": "Evaluation fixture: unavailable-evidence-cannot-support-finding",
+        "root_cause": "Insufficient evidence to determine the root cause.",
+        "confidence": "high",
+        "findings": [
+          {
+            "claim": "The container is running.",
+            "classification": "confirmed_fact",
+            "supporting_evidence_ids": [
+              "INS-001"
+            ],
+            "contradictory_evidence_ids": []
+          }
+        ]
+      },
+      "evidence_inventory": [
+        {
+          "id": "INS-001",
+          "source_type": "inspection",
+          "status": "unavailable",
+          "payload": {
+            "status": "running"
+          }
+        }
+      ],
+      "expect": {
+        "confidence": "low",
+        "finding_omitted": "The container is running."
+      },
+      "review_criteria": [
+        "Unavailable evidence cannot be cited as supporting proof."
+      ]
     }
   ]
 }
