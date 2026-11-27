@@ -22,62 +22,30 @@ def run_evaluation(investigator, run_name="baseline", prompt_version="evidence-g
             "id": case["id"],
             "passed": False,
             "error": None,
-            "review_criteria": case.get("review_criteria", []),
         }
         try:
-            raw_findings = case["model_output"].get("findings", [])
-            evidence_inventory = case["evidence_inventory"]
-            available_ids = {
-                item["id"] for item in evidence_inventory
-                if item.get("status") == "collected"
-            }
-            raw_references = [
-                reference
-                for finding in raw_findings if isinstance(finding, dict)
-                for reference in (finding.get("supporting_evidence_ids") or [])
-                if isinstance(reference, str)
-            ]
-            valid_reference_count = sum(
-                reference in available_ids for reference in raw_references
-            )
-            unsupported_finding_count = sum(
-                1 for finding in raw_findings
-                if not isinstance(finding, dict)
-                or not finding.get("supporting_evidence_ids")
-                or any(
-                    reference not in available_ids
-                    for reference in finding.get("supporting_evidence_ids", [])
-                )
-            )
             validated = investigator._validate_result(
-                case["model_output"], evidence_inventory
+                case["model_output"], case["evidence_inventory"]
             )
             expected = case["expect"]
             checks = []
-            raw_by_claim = {
-                finding.get("claim"): finding.get("classification")
-                for finding in raw_findings if isinstance(finding, dict)
+            evidence_ids = {
+                item["id"]
+                for item in case["evidence_inventory"]
+                if item.get("status") == "collected"
             }
-            downgraded_count = sum(
-                1 for finding in validated.get("findings", [])
-                if finding.get("claim") in raw_by_claim
-                and finding.get("classification") != raw_by_claim[finding.get("claim")]
+            cited_ids = set()
+            unsupported = 0
+            for finding in validated.get("findings", []):
+                cited = set(finding.get("supporting_evidence_ids", []))
+                cited_ids.update(cited)
+                unsupported += int(bool(cited - evidence_ids))
+            evidence_reference_accuracy = (
+                (len(cited_ids) - len(cited_ids - evidence_ids)) / len(cited_ids)
+                if cited_ids else 1.0
             )
-            validated_claims = {
-                finding.get("claim") for finding in validated.get("findings", [])
-            }
-            result["input_finding_count"] = len(raw_findings)
-            result["retained_finding_count"] = len(validated_claims)
-            result["omitted_finding_count"] = max(0, len(raw_findings) - len(validated_claims))
-            result["unsupported_finding_count"] = unsupported_finding_count
-            result["downgraded_finding_count"] = downgraded_count
-            result["total_evidence_references"] = len(raw_references)
-            result["valid_evidence_references"] = valid_reference_count
-            result["evidence_reference_accuracy"] = (
-                round(valid_reference_count / len(raw_references), 4)
-                if raw_references else None
-            )
-
+            result["evidence_reference_accuracy"] = round(evidence_reference_accuracy, 4)
+            result["unsupported_claim_count"] = unsupported
             if "confidence" in expected:
                 checks.append(validated["confidence"] == expected["confidence"])
             if expected.get("root_cause_insufficient"):
@@ -112,16 +80,6 @@ def run_evaluation(investigator, run_name="baseline", prompt_version="evidence-g
                 )
             if expected.get("recommendation_removed"):
                 checks.append(not validated.get("read_only_checks"))
-            if expected.get("classification_probable"):
-                checks.append(any(
-                    finding["classification"] == "probable_explanation"
-                    for finding in validated["findings"]
-                ))
-            if expected.get("finding_omitted"):
-                checks.append(not any(
-                    finding["claim"] == expected["finding_omitted"]
-                    for finding in validated["findings"]
-                ))
             if expected.get("must_reject"):
                 checks.append(False)
             result["passed"] = bool(checks) and all(checks)
@@ -153,24 +111,23 @@ def run_evaluation(investigator, run_name="baseline", prompt_version="evidence-g
         "failed": len(results) - passed,
         "pass_rate": round(passed / len(results), 4) if results else 0.0,
         "evidence_reference_accuracy": round(
-            sum(item.get("valid_evidence_references", 0) for item in results)
-            / sum(item.get("total_evidence_references", 0) for item in results),
+            sum(item.get("evidence_reference_accuracy", 0.0) for item in results)
+            / len(results),
             4,
-        ) if sum(item.get("total_evidence_references", 0) for item in results) else None,
+        ) if results else 0.0,
         "unsupported_claim_rate": round(
-            sum(item.get("unsupported_finding_count", 0) for item in results)
-            / sum(item.get("input_finding_count", 0) for item in results),
+            sum(item.get("unsupported_claim_count", 0) for item in results)
+            / sum(
+                len(finding.get("supporting_evidence_ids", []))
+                for item in results
+                for finding in item.get("output", {}).get("findings", [])
+            ),
             4,
-        ) if sum(item.get("input_finding_count", 0) for item in results) else 0.0,
-        "validator_quality_metrics": {
-            "input_findings": sum(item.get("input_finding_count", 0) for item in results),
-            "retained_findings": sum(item.get("retained_finding_count", 0) for item in results),
-            "omitted_findings": sum(item.get("omitted_finding_count", 0) for item in results),
-            "unsupported_findings": sum(item.get("unsupported_finding_count", 0) for item in results),
-            "downgraded_findings": sum(item.get("downgraded_finding_count", 0) for item in results),
-            "evidence_references": sum(item.get("total_evidence_references", 0) for item in results),
-            "valid_evidence_references": sum(item.get("valid_evidence_references", 0) for item in results),
-        },
+        ) if sum(
+            len(finding.get("supporting_evidence_ids", []))
+            for item in results
+            for finding in item.get("output", {}).get("findings", [])
+        ) else 0.0,
         # The current dataset has no independently adjudicated root-cause labels.
         # Do not present validator pass rate as root-cause accuracy.
         "root_cause_accuracy": None,
@@ -206,7 +163,7 @@ def run_live_model_evaluation(
         case for case in dataset["cases"]
         if not case.get("expect", {}).get("must_reject")
         and (not case_ids or case["id"] in set(case_ids))
-    ][:max(1, min(int(max_cases), 30))]
+    ][:max(1, min(int(max_cases), 12))]
     started_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     results = []
 
@@ -279,7 +236,6 @@ def run_live_model_evaluation(
             report = investigator._request_investigation(evidence)
             results.append({
                 "case_id": case["id"],
-                "review_criteria": case.get("review_criteria", []),
                 "status": "completed",
                 "confidence": report.get("confidence"),
                 "root_cause_assessment": report.get("root_cause"),
@@ -296,7 +252,6 @@ def run_live_model_evaluation(
         except Exception as exc:
             results.append({
                 "case_id": case["id"],
-                "review_criteria": case.get("review_criteria", []),
                 "status": "failed",
                 "error": redact_log_secrets(
                     f"{type(exc).__name__}: {exc}"

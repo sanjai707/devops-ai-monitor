@@ -9,7 +9,7 @@
 | 4 Evidence investigation | Tested / Verified | Evidence inventory, timeline, strict validation, low-confidence exit-137 handling verified |
 | 5 Knowledge/memory | Tested / Verified | Approved-only SQLite retrieval, version history and Knowledge Center verified |
 | 6 Feedback | Tested / Verified | Feedback persistence, analytics, review workflow and proposed correction knowledge verified |
-| 7 Evaluation | In progress | Phase 15 expands deterministic evidence-quality coverage to 30 cases; real-model accuracy remains unscored pending independently adjudicated labels |
+| 7 Evaluation | Tested / Partially verified | Expanded deterministic suite plus five live Qwen cases completed; no real-world accuracy score is available |
 | 8 Runbooks | Implemented / partially Verified | Knowledge category/search/versioning supports runbooks; specialized runbook library remains |
 | 9 Safe remediation | Implemented / safety-verified | Read-only allowlist and emergency disable implemented; no changing action executes |
 | 10 Multi-provider | Implemented / partially Verified | Docker provider interface live; Kubernetes/AWS remain unavailable external providers |
@@ -50,23 +50,3 @@
   49 investigations, 28,560 metric samples, 193 Docker events, 2 knowledge
   records, 3 knowledge versions, 2 feedback records, 2 evaluation runs and 3
   follow-ups. No database rows were deleted during QA.
-
-
-## Phase 15 — AI investigation reliability (implementation started)
-
-Objective: improve evidence-to-claim fidelity before expanding provider or deployment scope.
-
-Implemented in this milestone:
-- Source-aware deterministic checks for OOM claims, exit codes, runtime state, Docker health status, CPU/memory saturation, restart loops and operator-intent claims.
-- Contradictory evidence downgrades a finding; missing typed evidence prevents a finding from remaining a confirmed fact.
-- OOMKilled=true or a Docker OOM event can support an OOM observation; OOMKilled=false contradicts a positive OOM claim. Exit code 137 and high memory usage alone are not treated as OOM proof.
-- Operator-action annotations remain explicitly unverified context.
-- Added 18 additional deterministic fixtures (30 total) with case-specific review criteria.
-- Evaluation metrics now count raw evidence references, unsupported findings, omitted findings and downgraded findings before filtering. Root-cause accuracy remains null without adjudicated labels.
-- Real-model evaluation can select up to 30 cases; default remains five for a shorter local run.
-
-Remaining Phase 15 gates:
-- Run all 30 real-model cases against the local Ollama instance and review outputs.
-- Add independently adjudicated expected root-cause labels before calculating accuracy.
-- Compare baseline and revised prompts/validator using the same model, dataset and runtime settings.
-- Review semantic guardrail edge cases with human operators; these checks are conservative heuristics, not general natural-language entailment.

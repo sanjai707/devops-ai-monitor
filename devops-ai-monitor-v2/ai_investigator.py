@@ -182,25 +182,44 @@ def _assess_finding_support(claim, evidence_item):
     """
     claim_lower = claim.casefold()
     payload = evidence_item.get("payload") or {}
+    if not isinstance(payload, dict):
+        payload = {}
     recorded = payload.get("recorded_evidence") or {}
+    if not isinstance(recorded, dict):
+        recorded = {}
     attributes = payload.get("attributes") or {}
+    if not isinstance(attributes, dict):
+        attributes = {}
     source_type = evidence_item.get("source_type")
 
-    nested_events = (payload.get("result") or {}).get("events") or []
+    # Operator-action evidence uses a scalar payload.result (for example,
+    # "succeeded"), while approved Docker follow-ups use a result object.
+    # Normalize both forms before looking for nested event collections.
+    result_payload = payload.get("result")
+    if not isinstance(result_payload, dict):
+        result_payload = {}
+    nested_events = result_payload.get("events") or []
+    if not isinstance(nested_events, list):
+        nested_events = []
+    nested_events = [event for event in nested_events if isinstance(event, dict)]
+
     actions = [str(payload.get("action") or "").casefold()]
     actions.extend(
         str(event.get("action") or "").casefold()
-        for event in nested_events if isinstance(event, dict)
+        for event in nested_events
     )
     event_attributes = [attributes]
     event_attributes.extend(
         event.get("attributes") or {}
-        for event in nested_events if isinstance(event, dict)
+        for event in nested_events
+        if isinstance(event.get("attributes") or {}, dict)
     )
 
     def values(*keys):
         found = []
         for source in (payload, recorded, attributes, *event_attributes):
+            if not isinstance(source, dict):
+                continue
             for key in keys:
                 value = source.get(key)
                 if value is not None:

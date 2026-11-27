@@ -90,6 +90,23 @@ class Phase15QualityTests(unittest.TestCase):
         result = self.validate("The operator intentionally stopped the container.", inventory)
         self.assertEqual(result["findings"][0]["classification"], "probable_explanation")
 
+    def test_scalar_operator_result_is_not_parsed_as_nested_docker_events(self):
+        inventory = [{
+            "id": "ACT-001", "source_type": "operator_action", "status": "collected",
+            "payload": {
+                "action": "stop",
+                "result": "succeeded",
+                "source": "operator_annotation",
+                "context": "A test-harness stop",
+            },
+        }]
+        result = self.validate(
+            "The container was intentionally stopped by an operator.",
+            inventory,
+        )
+        self.assertEqual(result["findings"][0]["classification"], "probable_explanation")
+        self.assertEqual(result["confidence"], "low")
+
     def test_docker_die_event_does_not_prove_operator_intent(self):
         inventory = [{
             "id": "EVT-001", "source_type": "docker_event", "status": "collected",
