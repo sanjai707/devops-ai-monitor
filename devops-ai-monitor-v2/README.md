@@ -59,6 +59,7 @@ python -m unittest discover -s tests -p "test_*.py" -v
 npm.cmd --prefix frontend run typecheck
 npm.cmd --prefix frontend run build
 docker compose config --quiet
+docker compose --profile telemetry config --quiet
 ```
 
 The backend suite covers database concurrency and migrations, incident and
@@ -67,6 +68,10 @@ authentication, remediation and staged investigation follow-up collection.
 Browser tests exercise the incident acknowledgement and evidence-approval
 workflow through the dashboard. CI runs backend tests, frontend type-check/build,
 browser tests, and both Compose configuration checks.
+The latest local run on 2026-11-26 passed 44 backend tests, Python compilation,
+frontend type-check/build, and core, telemetry and production Compose
+configuration validation. The count is a point-in-time result; use the command
+above for the current suite.
 
 ```powershell
 Invoke-RestMethod http://127.0.0.1:8000/health

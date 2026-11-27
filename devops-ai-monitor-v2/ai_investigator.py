@@ -756,6 +756,20 @@ class IncidentInvestigator:
             missing_information.append(
                 "Exit code 137 is consistent with SIGKILL, but OOMKilled is false; the termination source and intent are not established."
             )
+
+        recent_log_lines = []
+        for item in inventory:
+            if item["source_type"] != "log" or item["status"] != "collected":
+                continue
+            payload = item.get("payload") or {}
+            line = payload.get("line")
+            if isinstance(line, str):
+                recent_log_lines.append(line)
+            followup_lines = (payload.get("result") or {}).get("lines") or []
+            recent_log_lines.extend(
+                line for line in followup_lines if isinstance(line, str)
+            )
+
         return {
             "incident": incident_payload,
             "container": {
@@ -769,12 +783,7 @@ class IncidentInvestigator:
             "metric_history": metric_samples[-60:],
             "docker_events": events[:100],
             "operator_actions": operator_actions[:50],
-            "recent_logs": "\n".join(
-                item["payload"]["line"]
-                for item in inventory
-                if item["source_type"] == "log"
-                and item["status"] == "collected"
-            ),
+            "recent_logs": "\n".join(recent_log_lines),
             "collection_errors": collection_errors,
             "missing_information": missing_information,
             "evidence_inventory": inventory,

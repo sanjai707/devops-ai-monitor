@@ -7,7 +7,7 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY main.py monitor.py incident_manager.py database.py thresholds.py ai_investigator.py docker_event_collector.py evaluation.py telemetry.py ./
+COPY main.py monitor.py incident_manager.py database.py thresholds.py ai_investigator.py docker_event_collector.py followup_collector.py evaluation.py telemetry.py ./
 COPY evaluation ./evaluation
 COPY providers ./providers
 COPY models ./models

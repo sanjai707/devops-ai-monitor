@@ -11,7 +11,7 @@ from fastapi.testclient import TestClient
 
 import database as database_module
 from database import IncidentDatabase
-from ai_investigator import redact_structured_data
+from ai_investigator import IncidentInvestigator, redact_structured_data
 from followup_collector import collect_approved_read_only_followup
 from evaluation import run_live_model_evaluation
 
@@ -99,6 +99,17 @@ def incident_record():
 
 
 class FollowupWorkflowTests(unittest.TestCase):
+    def test_backend_image_copies_followup_collector_module(self):
+        dockerfile = Path(__file__).resolve().parents[1] / "Dockerfile"
+        copy_instructions = [
+            line for line in dockerfile.read_text(encoding="utf-8").splitlines()
+            if line.startswith("COPY ")
+        ]
+        self.assertTrue(any(
+            "followup_collector.py" in instruction
+            for instruction in copy_instructions
+        ))
+
     def test_structured_redaction_removes_secret_fields_and_redacts_string_values(self):
         source = {
             "status": "failed",
@@ -260,6 +271,58 @@ class FollowupWorkflowTests(unittest.TestCase):
             stored = db.investigation_followups_for_incident(incident["id"])
             self.assertEqual(stored[0]["reassessment_investigation_id"], reassessment["id"])
 
+    def test_collected_followup_logs_are_included_in_reassessment_evidence(self):
+        class EvidenceContainer(FakeContainer):
+            attrs = {
+                "State": {
+                    "Status": "exited",
+                    "Running": False,
+                    "ExitCode": 137,
+                    "OOMKilled": False,
+                },
+                "HostConfig": {},
+                "Config": {"Image": "busybox:1.36.1"},
+            }
+
+            def logs(self, **kwargs):
+                return b""
+
+        marker = "QA_FOLLOWUP_LOG_MARKER"
+        with tempfile.TemporaryDirectory() as directory:
+            db = IncidentDatabase(str(Path(directory) / "followup.db"))
+            incident = db.create(incident_record())
+            source, _ = db.create_investigation(incident["id"])
+            followup = db.create_investigation_followup({
+                "incident_id": incident["id"],
+                "source_investigation_id": source["id"],
+                "container_id": incident["container_id"],
+                "action_id": "docker.container-logs",
+                "request": {"evidence_ids": ["INS-001"]},
+                "approved_by": "operator",
+                "approved_at": "2026-11-26T10:01:00Z",
+                "time_window": {"start": "2026-11-26T09:50:00Z"},
+            })
+            db.complete_investigation_followup(
+                followup["id"],
+                {"action_id": "docker.container-logs", "item_count": 1, "lines": [marker]},
+                status="collected",
+            )
+            investigator = IncidentInvestigator.__new__(IncidentInvestigator)
+            investigator.database = db
+
+            with patch(
+                "ai_investigator.docker.from_env",
+                return_value=FakeClient(EvidenceContainer()),
+            ):
+                evidence = investigator._collect_evidence(incident)
+
+            self.assertEqual(evidence["recent_logs"], marker)
+            followup_item = next(
+                item for item in evidence["evidence_inventory"]
+                if item["source_type"] == "log"
+                and item["payload"].get("action_id") == "docker.container-logs"
+            )
+            self.assertEqual(followup_item["payload"]["result"]["lines"], [marker])
 
     def test_followup_request_column_migrates_from_schema_seven(self):
         with tempfile.TemporaryDirectory() as directory:

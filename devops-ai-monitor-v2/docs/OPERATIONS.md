@@ -31,32 +31,71 @@ curl.exe http://127.0.0.1:3000
 
 ## Validation status and evidence
 
-The following are dated observations, not a claim that every feature in the
-current branch has been exercised:
+Latest local validation was performed on 2026-11-26 against commit
+`1c14e38175caead06a89ce88600fa791cd25a0c5`. These results describe this local
+run; they are not a production-readiness claim.
 
-- On 2026-11-26, before the staged follow-up workflow was added, the developer
-  ran the backend unittest discovery command locally: 26 tests passed. The
-  command output is the evidence for that checkout only.
-- On the same date, both `docker compose config --quiet` and
-  `docker compose --profile telemetry config --quiet` completed without
-  errors on the local checkout.
-- The current feature branch subsequently added the approved follow-up
-  collector/API, persistence and dashboard controls, eleven follow-up and privacy regression tests,
-  two previously undiscovered audit tests, a Playwright browser test, a live
-  Ollama evaluation CLI, Docker scenario scripts and CI. These additions have
-  **not yet been run in the user's local environment or reported green by CI**.
-- Earlier type-check/build and API checks applied to a prior revision. Re-run
-  the frontend checks on the current branch before treating the new UI as
-  verified.
-- Docker end-to-end scenarios and real Ollama inference evaluation remain
-  pending. A prior local Docker image pull was interrupted with a CloudFront
-  `EOF`; this is a registry/network transfer failure, not evidence that the
-  Compose files or application started successfully.
-- The browser test uses a controlled API fixture to exercise the dashboard
-  interaction path. It is not a live Docker or Ollama test.
-- The real-model evaluation returns actual Ollama responses for curated
-  evidence fixtures, but does not report root-cause accuracy because there are
-  no independently adjudicated labels.
+VERIFIED:
+
+- `python -m unittest discover -s tests -p "test_*.py" -v`: **44 tests passed**.
+- Top-level Python compilation, `npm.cmd run typecheck`, and `npm.cmd run build`
+  passed.
+- `docker compose config --quiet`,
+  `docker compose --profile telemetry config --quiet`, and production Compose
+  validation with explicit non-secret placeholder values passed.
+- Core Compose services were healthy on `127.0.0.1:8000` and
+  `127.0.0.1:3000`. `/health` reported API, Docker and Ollama connected;
+  monitor and event collector were running without errors after scenario cleanup.
+- All five labeled Docker scenarios (stopped, restart loop, unhealthy, high CPU
+  and high memory) generated matching incidents. Only the disposable labeled
+  containers were removed; incident and evidence records were retained.
+- A fresh stopped-container investigation received one operator-approved
+  timestamped log line and completed reassessment #55. The result included the
+  collected marker and retained low confidence / unknown termination intent.
+- Real `qwen2.5:3b` evaluation completed five curated cases. It reports actual
+  model outputs, but leaves root-cause accuracy unscored because there are no
+  independently adjudicated labels.
+- Live browser smoke checks covered desktop and narrow layouts; no console,
+  page errors, failed requests or horizontal overflow were observed. The
+  requested 390 px viewport rendered as 300 px CSS width in this environment.
+- Docker daemon outage/recovery and Ollama timeout, invalid endpoint and
+  recovery behavior were exercised in the preceding runtime pass.
+
+DEFECT REPRODUCED AND FIXED:
+
+- The first approved log follow-up returned one item, but reassessment #53
+  failed with `KeyError: 'line'`: evidence assembly expected `payload.line`
+  while approved logs are stored as `payload.result.lines`.
+- `ai_investigator.py` now accepts both evidence shapes, and
+  `test_collected_followup_logs_are_included_in_reassessment_evidence` covers
+  the regression. The focused 13-test follow-up suite and full 44-test suite
+  passed. The post-fix live follow-up and reassessment completed successfully.
+- The failed pre-fix record is intentionally retained for auditability. The
+  previous Docker-events follow-up for incident 22 also remains
+  `unavailable` with zero matching items; it was not treated as successful.
+
+DATABASE SNAPSHOT:
+
+- SQLite schema version 8; `PRAGMA integrity_check` returned `ok`.
+- Counts at capture: 35 incidents, 49 investigations (46 completed, 3 failed),
+  28,560 metric samples, 193 Docker events, 2 knowledge records, 3 knowledge
+  versions, 2 feedback records, 2 evaluation runs and 3 follow-ups.
+- Failed investigation records include historical model-output validation
+  failure #7 and `KeyError: 'line'` records #13 and #53. These rows were not
+  deleted; the same follow-up path passed after the fix as investigation #55.
+
+BLOCKED / NOT VERIFIED:
+
+- Root-cause accuracy, confidence calibration and unsupported-claim rates for
+  a real deployment model are not established by five fixture inferences.
+- The actual dashboard button click for approving a follow-up was not exercised;
+  approval and reassessment were verified via the local API. The browser check
+  is a UI smoke check, not an end-to-end operator workflow test.
+- Local `API_KEY` is empty, so local API-key enforcement is disabled. Production
+  validation used a placeholder only; no real production secret, TLS, RBAC or
+  MFA deployment was tested.
+- Kubernetes/AWS, PostgreSQL migration, multi-instance operation and external
+  production recovery remain unverified or unimplemented.
 
 ## Current branch validation commands
 
@@ -68,6 +107,12 @@ npm.cmd --prefix frontend run typecheck
 npm.cmd --prefix frontend run build
 docker compose config --quiet
 docker compose --profile telemetry config --quiet
+```
+
+Python compilation can be checked with:
+
+```powershell
+Get-ChildItem -Filter "*.py" | ForEach-Object { python -m py_compile $_.FullName }
 ```
 
 The GitHub Actions workflow also installs Chromium and runs the Playwright

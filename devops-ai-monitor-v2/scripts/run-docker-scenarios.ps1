@@ -17,8 +17,11 @@ if ($LASTEXITCODE -ne 0) {
 }
 
 Write-Host "Checking test image $Image..."
-docker image inspect $Image *> $null
+$availableImages = @(docker image ls --format "{{.Repository}}:{{.Tag}}")
 if ($LASTEXITCODE -ne 0) {
+    throw "Unable to list local Docker images."
+}
+if ($availableImages -notcontains $Image) {
     Write-Host "Image not present locally; pulling $Image..."
     docker pull $Image
     if ($LASTEXITCODE -ne 0) {
@@ -56,7 +59,7 @@ Start-Sleep -Seconds 12
 docker stop "$Prefix-stopped" | Out-Null
 if ($LASTEXITCODE -ne 0) { throw "Unable to stop stopped-scenario container." }
 
-Start-TestContainer -Scenario "restart-loop" -ExtraArgs @("--restart", "on-failure:8") -Command @("sh", "-c", "exit 1")
+Start-TestContainer -Scenario "restart-loop" -ExtraArgs @("--restart", "on-failure:8") -Command @("sh", "-c", "sleep 12; exit 1")
 
 Start-TestContainer -Scenario "unhealthy" -ExtraArgs @(
     "--health-cmd", "exit 1",
@@ -71,10 +74,11 @@ Start-TestContainer -Scenario "high-cpu" -ExtraArgs @("--cpus", "1.0") -Command 
 )
 
 Start-TestContainer -Scenario "high-memory" -ExtraArgs @(
-    "--memory", "128m"
+    "--memory", "128m",
+    "--tmpfs", "/memory:size=120m"
 ) -Command @(
     "sh", "-c",
-    'awk ''BEGIN { for (i = 0; i < 116; i++) data[i] = sprintf("%01000000d", 0); system("sleep 600") }'''
+    "dd if=/dev/zero of=/memory/probe bs=1M count=112 2>/dev/null; sleep 600"
 )
 
 Write-Host ""

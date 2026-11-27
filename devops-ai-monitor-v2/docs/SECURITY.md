@@ -73,6 +73,10 @@ VERIFIED LIMITATIONS:
 - The Docker socket remains a privileged host capability. This feature narrows
   application behavior but does not make the Docker API socket itself
   intrinsically read-only.
+- Local QA verified an approved, bounded log collection and completed
+  reassessment. Approval was sent through the API with the local profile's
+  empty `API_KEY`; this verifies the allowlisted collection path, not operator
+  authentication or the dashboard button's browser workflow.
 
 ## Runtime authentication audit
 

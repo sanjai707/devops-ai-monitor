@@ -79,20 +79,22 @@ docker compose -f compose.production.yaml config --quiet
 
 ## Actual validation results
 
-- Host backend suite passed 23 tests.
+- Host backend suite passed 44 tests on the latest local run.
 - Python compilation passed.
 - Frontend type checking passed.
 - Frontend production builds passed.
 - Local and production Compose configuration validated.
 - Backend health returned API/Docker/Ollama `ok/connected/connected`.
 - Compose backend and dashboard services started successfully.
-- SQLite integrity was `ok` at schema 6.
+- SQLite integrity was `ok` at schema 8 on the latest local run (an earlier
+  audit checked schema 6).
 - Existing incidents and investigations remained present after migrations and restart.
 - Historical metric API returned live persisted samples and network throughput rates.
 - Evidence and incident timeline APIs passed.
 - Knowledge approval/search/version APIs passed.
 - Feedback and correction proposal APIs passed.
-- Evaluation API completed 4/4 cases and stored the report.
+- The deterministic evaluation regression passed; the later real-model
+  evaluation is recorded separately below.
 - Remediation status reported disabled with no autonomous execution.
 - Docker provider reported connected; Kubernetes and AWS reported unconfigured.
 - Backup and restore scripts both executed successfully; post-restore SQLite integrity was `ok`.
@@ -107,6 +109,88 @@ docker compose -f compose.production.yaml config --quiet
 - A temporary unavailable-log handling defect was corrected so no log payload key is required for missing logs.
 - A 422 comment API check used invalid shell JSON and was rerun with valid PowerShell JSON serialization.
 - Production Compose correctly rejected missing required environment variables; this is intentional and was resolved by explicit profile validation values.
+
+## Latest runtime continuation — 2026-11-26
+
+Status: **VERIFIED locally / NOT PRODUCTION READY**
+
+Exact validation:
+
+```powershell
+python -m unittest discover -s tests -p "test_*.py" -v
+Get-ChildItem -Filter "*.py" | ForEach-Object { python -m py_compile $_.FullName }
+Set-Location frontend
+npm.cmd run typecheck
+npm.cmd run build
+Set-Location ..
+docker compose config --quiet
+docker compose --profile telemetry config --quiet
+docker compose -f compose.production.yaml config --quiet
+python scripts/evaluate_ollama.py --model qwen2.5:3b --max-cases 5 --output reports/ollama-evaluation.json
+```
+
+Results:
+
+- Backend: **44 passed, 0 failed**; Python compilation passed.
+- Frontend typecheck and production build passed.
+- Core, telemetry and production Compose configurations passed. Production
+  configuration used non-secret placeholders and is not evidence of a deployed
+  production environment.
+- Docker and Ollama were independently connected after backend rebuild. The
+  backend and dashboard were healthy; monitor and event collector reported
+  running with no errors after cleanup.
+- All five labeled Docker scenarios generated corresponding incidents. The
+  disposable scenario containers were removed by exact ID after verification;
+  their synthetic incidents and evidence remain in SQLite.
+- SQLite schema version was 8 and integrity check returned `ok`. Counts at
+  capture: 35 incidents, 49 investigations (46 completed, 3 failed), 28,560
+  metric samples, 193 Docker events, 2 knowledge records, 3 knowledge versions,
+  2 feedback records, 2 evaluation runs and 3 follow-ups. No database rows were
+  deleted.
+- The requested real-model evaluation completed 5/5 cases using Qwen 2.5 3B.
+  `root_cause_accuracy` remains `null` because the fixture labels are not
+  independently adjudicated. Completion is not an accuracy claim. The JSON
+  output is saved at `reports/ollama-evaluation.json`.
+- Existing live browser smoke checks found no console errors, page errors,
+  failed requests or horizontal overflow in desktop/narrow layouts. The
+  requested 390 px viewport was rendered at 300 px CSS width. Follow-up approval
+  was exercised through the local API, not by clicking the dashboard control.
+
+### Follow-up defect and regression
+
+The first live approved log collection returned one item, but reassessment #53
+failed with `KeyError: 'line'`. Ordinary log evidence uses `payload.line`, while
+approved follow-up evidence stores lines under `payload.result.lines`.
+`ai_investigator.py` now reads both forms; a focused regression test exercises
+database-backed evidence assembly. The focused 13-test follow-up suite and full
+44-test suite passed after the change. The rebuilt live service then completed
+approved follow-up reassessment #55 and included the collected synthetic log
+marker in its evidence inventory.
+
+The pre-fix failure record remains in the database. Historical failures #7
+(invalid model result) and #13 (`KeyError: 'line'`) also remain recorded; they
+were not cleared or rewritten. A separate earlier Docker-events approval
+remains `unavailable` with zero matching items. These failures are not counted
+as passing follow-ups.
+
+The real-model report's five cases produced conservative, low-confidence
+assessments for exit-code-137/OOM-false and insufficient-evidence fixtures. The
+verified-root-cause fixture received a probable, not confirmed, OOM assessment
+with event evidence. These are qualitative observations only; no accuracy,
+unsupported-claim or calibration rate is asserted.
+
+### Remaining deployment blockers
+
+- Local `API_KEY` is empty, so authentication was disabled in the live local
+  profile. API-key middleware tests passed, but API keys do not provide user
+  identity, RBAC or MFA.
+- No production secrets, TLS termination, RBAC, MFA, rate limiting, PostgreSQL
+  migration or multi-instance deployment was configured or verified.
+- The successful five-case Ollama run does not establish real-world model
+  accuracy. Human review and independently adjudicated evaluation cases are
+  still required.
+- Browser smoke checks do not prove the full dashboard approval, feedback and
+  recovery workflows end to end.
 
 ## Known limitations
 
@@ -151,8 +235,8 @@ FAILED / defect status:
   this profile. Production Compose requires an API key.
 
 BLOCKED:
-- A browser workflow action that requires a real operator to perform a mutation
-  was not claimed if only synthetic API calls were used.
+- The dashboard's follow-up approval button was not exercised end-to-end in a
+  browser; approval and reassessment were verified through the local API.
 - Production TLS, MFA and RBAC are not implemented.
 
 - SQLite migration is additive and existing-record-preserving; foreign keys,
@@ -167,12 +251,12 @@ BLOCKED:
 - TLS, MFA, RBAC and secrets-manager integration are not implemented.
 - Production Compose remains blocked without real secrets and an externally
   reachable Ollama endpoint.
-- Live Docker and Ollama checks returned unavailable while the Docker daemon
-  was stopped. Docker, Ollama and full Compose restart recovery are therefore
-  BLOCKED, while provider and health failure behavior passed synthetic/unit checks.
+- Docker and Ollama were unavailable during an earlier outage test and later
+  recovered; live Docker/Ollama, Compose startup and the five failure scenarios
+  are now VERIFIED for this local run. This does not verify production recovery.
 - Evaluation is a deterministic fixture regression, not real-model accuracy.
-- Browser automation was not performed in this audit. Host dashboard serving
-  and `/api/health` proxying were verified with HTTP checks.
+- Browser automation was performed for a local desktop/narrow smoke check, but
+  not for the complete operator approval or feedback workflows.
 
 - Kubernetes and AWS provider implementations require external credentials/clusters and were not claimed implemented.
 - Full role-based authorization, MFA and a secrets manager are not implemented.

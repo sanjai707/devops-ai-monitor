@@ -1,0 +1,229 @@
+{
+  "run_name": "local-ollama-review",
+  "evaluation_mode": "real_model_inference_human_review",
+  "model_name": "qwen2.5:3b",
+  "dataset_version": "2.0.0",
+  "started_at": "2026-11-26T17:29:41Z",
+  "completed_at": "2026-11-26T17:32:16Z",
+  "selected_cases": 5,
+  "completed_cases": 5,
+  "failed_cases": 0,
+  "root_cause_accuracy": null,
+  "root_cause_accuracy_status": "not_scored_no_independently_adjudicated_labels",
+  "review_note": "These are actual model outputs against curated evidence fixtures. Review each result; do not interpret completion, confidence, or the deterministic validator pass rate as root-cause accuracy.",
+  "cases": [
+    {
+      "case_id": "exit137-oom-false",
+      "status": "completed",
+      "confidence": "low",
+      "root_cause_assessment": "Insufficient evidence to determine the root cause.",
+      "summary": "The container exited with code 137 while OOMKilled was false [INS-001]; the signal sender and termination intent are unknown.",
+      "findings": [
+        {
+          "claim": "The container exited with code 137 (SIGKILL).",
+          "classification": "confirmed_fact",
+          "supporting_evidence_ids": [
+            "INS-001"
+          ],
+          "contradictory_evidence_ids": []
+        },
+        {
+          "claim": "At inspection time, the container was None with exit code 137 and OOMKilled false.",
+          "classification": "confirmed_fact",
+          "supporting_evidence_ids": [
+            "INS-001"
+          ],
+          "contradictory_evidence_ids": []
+        },
+        {
+          "claim": "Exit code 137 is consistent with SIGKILL, but the termination source and intent are not established.",
+          "classification": "hypothesis",
+          "supporting_evidence_ids": [
+            "INS-001"
+          ],
+          "contradictory_evidence_ids": []
+        }
+      ],
+      "missing_information": [
+        "No explicit operator-action or test annotation was collected; stop intent remains unknown."
+      ],
+      "read_only_followups_proposed": [
+        "docker.container-events",
+        "docker.container-logs"
+      ],
+      "evidence_inventory": [
+        {
+          "id": "INS-001",
+          "source_type": "inspection",
+          "status": "collected",
+          "payload": {
+            "exit_code": 137,
+            "oom_killed": false
+          }
+        }
+      ]
+    },
+    {
+      "case_id": "unknown-evidence-id",
+      "status": "completed",
+      "confidence": "low",
+      "root_cause_assessment": "Insufficient evidence to determine the root cause.",
+      "summary": "Observed: The container is running within the specified window with no unusual activity detected. [MET-001]. Available observations do not establish a root cause.",
+      "findings": [
+        {
+          "claim": "The container is running within the specified window with no unusual activity detected.",
+          "classification": "confirmed_fact",
+          "supporting_evidence_ids": [
+            "MET-001"
+          ],
+          "contradictory_evidence_ids": []
+        }
+      ],
+      "missing_information": [],
+      "read_only_followups_proposed": [],
+      "evidence_inventory": [
+        {
+          "id": "MET-001",
+          "source_type": "metric",
+          "status": "collected",
+          "payload": {
+            "cpu_percent": 10,
+            "memory_percent": 20
+          }
+        }
+      ]
+    },
+    {
+      "case_id": "oom-contradiction",
+      "status": "completed",
+      "confidence": "low",
+      "root_cause_assessment": "Insufficient evidence to determine the root cause.",
+      "summary": "The container exited with code 137 while OOMKilled was false [INS-001]; the signal sender and termination intent are unknown.",
+      "findings": [
+        {
+          "claim": "Container evaluation exited with exit code 137 (SIGKILL)",
+          "classification": "confirmed_fact",
+          "supporting_evidence_ids": [
+            "INS-001"
+          ],
+          "contradictory_evidence_ids": []
+        },
+        {
+          "claim": "At inspection time, the container was None with exit code 137 and OOMKilled false.",
+          "classification": "confirmed_fact",
+          "supporting_evidence_ids": [
+            "INS-001"
+          ],
+          "contradictory_evidence_ids": []
+        },
+        {
+          "claim": "Exit code 137 is consistent with SIGKILL, but the termination source and intent are not established.",
+          "classification": "hypothesis",
+          "supporting_evidence_ids": [
+            "INS-001"
+          ],
+          "contradictory_evidence_ids": []
+        }
+      ],
+      "missing_information": [
+        "No explicit operator-action or test annotation was collected; stop intent remains unknown."
+      ],
+      "read_only_followups_proposed": [
+        "docker.container-events",
+        "docker.container-logs"
+      ],
+      "evidence_inventory": [
+        {
+          "id": "INS-001",
+          "source_type": "inspection",
+          "status": "collected",
+          "payload": {
+            "exit_code": 137,
+            "oom_killed": false
+          }
+        }
+      ]
+    },
+    {
+      "case_id": "verified-root-cause",
+      "status": "completed",
+      "confidence": "medium",
+      "root_cause_assessment": "Probable assessment (unconfirmed): The container was killed due to OOM conditions. [EVT-001]",
+      "summary": "Possible explanation: The container was killed due to OOM conditions. [EVT-001]. This is not confirmed.",
+      "findings": [
+        {
+          "claim": "The container exited with exit code 137 due to SIGKILL.",
+          "classification": "confirmed_fact",
+          "supporting_evidence_ids": [
+            "INS-001"
+          ],
+          "contradictory_evidence_ids": []
+        },
+        {
+          "claim": "The container was killed due to OOM conditions.",
+          "classification": "probable_explanation",
+          "supporting_evidence_ids": [
+            "EVT-001"
+          ],
+          "contradictory_evidence_ids": []
+        }
+      ],
+      "missing_information": [],
+      "read_only_followups_proposed": [],
+      "evidence_inventory": [
+        {
+          "id": "INS-001",
+          "source_type": "inspection",
+          "status": "collected",
+          "payload": {
+            "exit_code": 137,
+            "oom_killed": true
+          }
+        },
+        {
+          "id": "EVT-001",
+          "source_type": "docker_event",
+          "status": "collected",
+          "payload": {
+            "action": "oom",
+            "attributes": {
+              "exitCode": "137"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "case_id": "operator-controlled-stop",
+      "status": "completed",
+      "confidence": "low",
+      "root_cause_assessment": "Insufficient evidence to determine the root cause.",
+      "summary": "Observed: The container was stopped by an operator-controlled action [ACT-001]. Available observations do not establish a root cause.",
+      "findings": [
+        {
+          "claim": "The container was stopped by an operator-controlled action",
+          "classification": "confirmed_fact",
+          "supporting_evidence_ids": [
+            "ACT-001"
+          ],
+          "contradictory_evidence_ids": []
+        }
+      ],
+      "missing_information": [],
+      "read_only_followups_proposed": [],
+      "evidence_inventory": [
+        {
+          "id": "ACT-001",
+          "source_type": "operator_action",
+          "status": "collected",
+          "payload": {
+            "action": "stop",
+            "result": "succeeded",
+            "source": "test_harness",
+            "context": "Controlled test stop"
+          }
+        }
+      ]
+    }
+  ]
+}
